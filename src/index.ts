@@ -8,6 +8,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { IBTools } from "./tools.js";
+import { IBGatewayManager } from "./gateway-manager.js";
 import express from "express";
 import cors from "cors";
 import { randomUUID } from "node:crypto";
@@ -15,6 +16,7 @@ import { randomUUID } from "node:crypto";
 class IBMCPServer {
   private server: Server;
   private tools: IBTools;
+  private gatewayManager: IBGatewayManager;
   private requestCount = 0;
   private lastMemoryCheck = Date.now();
 
@@ -34,6 +36,7 @@ class IBMCPServer {
     );
 
     this.tools = new IBTools();
+    this.gatewayManager = new IBGatewayManager();
     this.setupHandlers();
   }
 
@@ -83,8 +86,25 @@ class IBMCPServer {
   }
 
   async run() {
+    // Set up shutdown handlers first
+    this.setupShutdownHandlers();
+    
+    // Start IB Gateway first
+    console.log('🚀 Starting Interactive Brokers MCP Server...');
+    console.log('📦 Starting IB Gateway...');
+    
+    try {
+      await this.gatewayManager.startGateway();
+      console.log('✅ IB Gateway started successfully');
+    } catch (error) {
+      console.error('❌ Failed to start IB Gateway:', error);
+      process.exit(1);
+    }
+    
     // Check if we should run HTTP server (for Cursor/development) or stdio (for production)
     const useHttp = process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http');
+    
+    console.log(`📡 Starting MCP Server in ${useHttp ? 'HTTP' : 'STDIO'} mode...`);
     
     if (useHttp) {
       await this.runHttpServer();
@@ -227,8 +247,36 @@ class IBMCPServer {
           console.error(`Error closing transport for session ${sessionId}:`, error);
         }
       }
-      process.exit(0);
+      await this.shutdown();
     });
+  }
+
+  private setupShutdownHandlers() {
+    const shutdown = async () => {
+      await this.shutdown();
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+    process.on('exit', () => {
+      // Synchronous cleanup only
+      console.log('🛑 Process exiting...');
+    });
+  }
+
+  private async shutdown() {
+    console.log('🛑 Shutting down Interactive Brokers MCP Server...');
+    
+    try {
+      if (this.gatewayManager) {
+        await this.gatewayManager.stopGateway();
+      }
+    } catch (error) {
+      console.error('Error stopping gateway:', error);
+    }
+    
+    console.log('✅ Shutdown complete');
+    process.exit(0);
   }
 }
 

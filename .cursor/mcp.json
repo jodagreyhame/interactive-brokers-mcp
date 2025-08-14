@@ -1,7 +1,10 @@
 {
     "mcpServers": {
         "interactive-brokers": {
-                "url": "http://localhost:3001/mcp"
+            "command": "node",
+            "args": [
+                "/Users/nitayr/projects/private/interactive-brokers-mcp/dist/index.js"
+            ]
         }
     }
 }

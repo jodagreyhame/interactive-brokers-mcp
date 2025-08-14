@@ -4,6 +4,16 @@
   "description": "MCP server for Interactive Brokers API integration",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "ib-mcp": "dist/index.js"
+  },
+  "preferGlobal": true,
+  "files": [
+    "dist/**/*",
+    "ib-gateway/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",

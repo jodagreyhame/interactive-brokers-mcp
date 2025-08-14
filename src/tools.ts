@@ -200,22 +200,12 @@ export class IBTools {
       switch (name) {
         case "authenticate": {
           console.log(`[TOOLS-${requestId}] Executing authenticate...`);
-          GetAccountInfoSchema.parse(args); // Validate schema
+          AuthenticateSchema.parse(args); // Validate schema
           
           const authUrl = `https://${config.IB_GATEWAY_HOST}:${config.IB_GATEWAY_PORT}`;
           
           try {
-            // Check if we're running in a Docker container or environment without display
-            const isInContainer = process.env.container || process.env.DOCKER_CONTAINER || 
-                                 process.env.NODE_ENV === 'production' || 
-                                 !process.env.DISPLAY;
-            
-            if (isInContainer) {
-              console.log(`[TOOLS-${requestId}] Running in container/production environment - skipping browser open`);
-              throw new Error("Running in containerized environment");
-            }
-            
-            // Automatically open the browser (only in development/local environment)
+            // Automatically open the browser in local environment
             console.log(`[TOOLS-${requestId}] Opening browser to ${authUrl}`);
             await open(authUrl);
             
@@ -224,12 +214,14 @@ export class IBTools {
               authUrl: authUrl,
               instructions: [
                 "1. The authentication page has been opened in your default browser",
-                "2. Accept any SSL certificate warnings in your browser",
+                "2. Accept any SSL certificate warnings in your browser (this is normal for localhost)",
                 "3. Complete the authentication process in the IB Gateway web interface",
-                "4. Once authenticated, you can use other trading tools"
+                "4. Log in with your Interactive Brokers credentials",
+                "5. Once authenticated, you can use other trading tools"
               ],
               url: authUrl,
-              browserOpened: true
+              browserOpened: true,
+              note: "IB Gateway is running locally - your credentials stay secure on your machine"
             };
             
             console.log(`[TOOLS-${requestId}] authenticate completed successfully - browser opened`);
@@ -245,20 +237,22 @@ export class IBTools {
             const errorMessage = browserError instanceof Error ? browserError.message : String(browserError);
             console.warn(`[TOOLS-${requestId}] Cannot open browser automatically:`, errorMessage);
             
-            // Provide manual instructions when browser opening fails or is not available
+            // Provide manual instructions when browser opening fails
             const result = {
               message: "Opening Interactive Brokers authentication interface...",
               authUrl: authUrl,
               instructions: [
                 "1. Open the authentication URL below in your browser:",
                 `   ${authUrl}`,
-                "2. Accept any SSL certificate warnings in your browser",
+                "2. Accept any SSL certificate warnings in your browser (this is normal for localhost)",
                 "3. Complete the authentication process in the IB Gateway web interface",
-                "4. Once authenticated, you can use other trading tools"
+                "4. Log in with your Interactive Brokers credentials", 
+                "5. Once authenticated, you can use other trading tools"
               ],
               url: authUrl,
               browserOpened: false,
-              note: "Browser opening not available in this environment"
+              note: "Please open the URL manually. IB Gateway is running locally - your credentials stay secure on your machine",
+              error: `Browser auto-open failed: ${errorMessage}`
             };
             
             console.log(`[TOOLS-${requestId}] authenticate completed with manual instructions`);
