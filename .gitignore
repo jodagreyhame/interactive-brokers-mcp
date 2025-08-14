@@ -132,6 +132,7 @@ Thumbs.db
 # Interactive Brokers specific
 ib-gateway/logs/
 *.jts
+.vertx/
 
 # Docker volumes
 data/
