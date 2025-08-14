@@ -2,6 +2,7 @@ import { z } from "zod";
 import { IBClient } from "./ib-client.js";
 import { config } from "./config.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import open from "open";
 
 // Tool schemas
 const GetAccountInfoSchema = z.object({
@@ -202,27 +203,74 @@ export class IBTools {
           GetAccountInfoSchema.parse(args); // Validate schema
           
           const authUrl = `https://${config.IB_GATEWAY_HOST}:${config.IB_GATEWAY_PORT}`;
-          const result = {
-            message: "Opening Interactive Brokers authentication interface...",
-            authUrl: authUrl,
-            instructions: [
-              "1. Click on the authentication URL below",
-              "2. Accept any SSL certificate warnings in your browser",
-              "3. Complete the authentication process in the IB Gateway web interface",
-              "4. Once authenticated, you can use other trading tools"
-            ],
-            url: authUrl
-          };
           
-          console.log(`[TOOLS-${requestId}] authenticate completed successfully`);
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(result, null, 2),
-              },
-            ],
-          };
+          try {
+            // Check if we're running in a Docker container or environment without display
+            const isInContainer = process.env.container || process.env.DOCKER_CONTAINER || 
+                                 process.env.NODE_ENV === 'production' || 
+                                 !process.env.DISPLAY;
+            
+            if (isInContainer) {
+              console.log(`[TOOLS-${requestId}] Running in container/production environment - skipping browser open`);
+              throw new Error("Running in containerized environment");
+            }
+            
+            // Automatically open the browser (only in development/local environment)
+            console.log(`[TOOLS-${requestId}] Opening browser to ${authUrl}`);
+            await open(authUrl);
+            
+            const result = {
+              message: "Interactive Brokers authentication interface opened in your browser",
+              authUrl: authUrl,
+              instructions: [
+                "1. The authentication page has been opened in your default browser",
+                "2. Accept any SSL certificate warnings in your browser",
+                "3. Complete the authentication process in the IB Gateway web interface",
+                "4. Once authenticated, you can use other trading tools"
+              ],
+              url: authUrl,
+              browserOpened: true
+            };
+            
+            console.log(`[TOOLS-${requestId}] authenticate completed successfully - browser opened`);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          } catch (browserError) {
+            const errorMessage = browserError instanceof Error ? browserError.message : String(browserError);
+            console.warn(`[TOOLS-${requestId}] Cannot open browser automatically:`, errorMessage);
+            
+            // Provide manual instructions when browser opening fails or is not available
+            const result = {
+              message: "Opening Interactive Brokers authentication interface...",
+              authUrl: authUrl,
+              instructions: [
+                "1. Open the authentication URL below in your browser:",
+                `   ${authUrl}`,
+                "2. Accept any SSL certificate warnings in your browser",
+                "3. Complete the authentication process in the IB Gateway web interface",
+                "4. Once authenticated, you can use other trading tools"
+              ],
+              url: authUrl,
+              browserOpened: false,
+              note: "Browser opening not available in this environment"
+            };
+            
+            console.log(`[TOOLS-${requestId}] authenticate completed with manual instructions`);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
         }
 
         case "get_account_info": {

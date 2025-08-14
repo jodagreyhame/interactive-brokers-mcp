@@ -13,7 +13,12 @@
     "watch": "tsc --watch",
     "clean": "rm -rf dist"
   },
-  "keywords": ["mcp", "interactive-brokers", "trading", "api"],
+  "keywords": [
+    "mcp",
+    "interactive-brokers",
+    "trading",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -22,6 +27,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.0",
     "express": "^4.18.0",
+    "open": "^10.2.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
