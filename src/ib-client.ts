@@ -165,6 +165,14 @@ export class IBClient {
       return result;
     } catch (error) {
       console.error("[ACCOUNT-INFO] Failed to get account info:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error("Authentication required to retrieve account information. Please authenticate with Interactive Brokers first.");
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error("Failed to retrieve account information");
     }
   }
@@ -180,6 +188,14 @@ export class IBClient {
       return response.data;
     } catch (error) {
       console.error("Failed to get positions:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error("Authentication required to retrieve positions. Please authenticate with Interactive Brokers first.");
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error("Failed to retrieve positions");
     }
   }
@@ -210,8 +226,41 @@ export class IBClient {
       };
     } catch (error) {
       console.error("Failed to get market data:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error(`Authentication required to retrieve market data for ${symbol}. Please authenticate with Interactive Brokers first.`);
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error(`Failed to retrieve market data for ${symbol}`);
     }
+  }
+
+  private isAuthenticationError(error: any): boolean {
+    if (!error) return false;
+    
+    const errorMessage = error.message || error.toString();
+    const errorStatus = error.response?.status;
+    const responseData = error.response?.data;
+    
+    // Check for common authentication error patterns
+    return (
+      errorStatus === 401 ||
+      errorStatus === 403 ||
+      errorStatus === 500 ||  // IB Gateway sometimes returns 500 for auth issues
+      errorMessage.includes("authentication") ||
+      errorMessage.includes("authenticate") ||
+      errorMessage.includes("unauthorized") ||
+      errorMessage.includes("not authenticated") ||
+      errorMessage.includes("login") ||
+      responseData?.error?.message?.includes("not authenticated") ||
+      responseData?.error?.message?.includes("authentication") ||
+      // IB Gateway specific patterns
+      responseData?.error === "not authenticated" ||
+      (errorStatus === 500 && responseData?.error?.includes("authentication"))
+    );
   }
 
   async placeOrder(orderRequest: OrderRequest): Promise<any> {
@@ -258,6 +307,14 @@ export class IBClient {
       return response.data;
     } catch (error) {
       console.error("Failed to place order:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error("Authentication required to place orders. Please authenticate with Interactive Brokers first.");
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error("Failed to place order");
     }
   }
@@ -268,6 +325,14 @@ export class IBClient {
       return response.data;
     } catch (error) {
       console.error("Failed to get order status:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error(`Authentication required to get order status for order ${orderId}. Please authenticate with Interactive Brokers first.`);
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error(`Failed to get status for order ${orderId}`);
     }
   }
@@ -283,6 +348,14 @@ export class IBClient {
       return response.data;
     } catch (error) {
       console.error("Failed to get orders:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error("Authentication required to retrieve orders. Please authenticate with Interactive Brokers first.");
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error("Failed to retrieve orders");
     }
   }

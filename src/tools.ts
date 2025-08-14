@@ -169,17 +169,27 @@ export class IBTools {
     
     const errorMessage = error.message || error.toString();
     const errorStatus = error.response?.status;
+    const responseData = error.response?.data;
+    
+    // Check if error was explicitly marked as auth error
+    if ((error as any).isAuthError) return true;
     
     // Check for common authentication error patterns
     return (
       errorStatus === 401 ||
       errorStatus === 403 ||
+      errorStatus === 500 ||  // IB Gateway sometimes returns 500 for auth issues
       errorMessage.includes("authentication") ||
       errorMessage.includes("authenticate") ||
       errorMessage.includes("unauthorized") ||
       errorMessage.includes("not authenticated") ||
       errorMessage.includes("login") ||
-      error.response?.data?.error?.message?.includes("not authenticated")
+      errorMessage.includes("Authentication required") ||
+      responseData?.error?.message?.includes("not authenticated") ||
+      responseData?.error?.message?.includes("authentication") ||
+      // IB Gateway specific patterns
+      responseData?.error === "not authenticated" ||
+      (errorStatus === 500 && responseData?.error?.includes("authentication"))
     );
   }
 
