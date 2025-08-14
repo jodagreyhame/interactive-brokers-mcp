@@ -14,6 +14,7 @@ export class IBGatewayManager {
   private isStarting = false;
   private isReady = false;
   private useStderr: boolean;
+  private cleanupHandlersRegistered = false;
 
   constructor() {
     // Gateway directory is relative to the project root (one level up from src)
@@ -23,6 +24,9 @@ export class IBGatewayManager {
     this.jreDir = path.join(__dirname, '../jre', platform);
     // Determine if we should use stderr for logging (STDIO mode)
     this.useStderr = !(process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http'));
+    
+    // Register cleanup handlers to ensure child processes are killed
+    this.registerCleanupHandlers();
   }
 
   private log(message: string) {
@@ -30,6 +34,79 @@ export class IBGatewayManager {
       console.error(message);
     } else {
       console.log(message);
+    }
+  }
+
+  private registerCleanupHandlers(): void {
+    if (this.cleanupHandlersRegistered) {
+      return;
+    }
+
+    this.cleanupHandlersRegistered = true;
+
+    // Handle graceful shutdown signals
+    const cleanup = async (signal: string) => {
+      this.log(`🛑 Received ${signal}, cleaning up...`);
+      await this.cleanup();
+      process.exit(0);
+    };
+
+    // Handle different termination signals
+    process.on('SIGINT', () => cleanup('SIGINT'));
+    process.on('SIGTERM', () => cleanup('SIGTERM'));
+    process.on('SIGHUP', () => cleanup('SIGHUP'));
+
+    // Handle uncaught exceptions and unhandled rejections
+    process.on('uncaughtException', async (error) => {
+      console.error('❌ Uncaught Exception:', error);
+      await this.cleanup();
+      process.exit(1);
+    });
+
+    process.on('unhandledRejection', async (reason, promise) => {
+      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      await this.cleanup();
+      process.exit(1);
+    });
+
+    // Handle normal process exit
+    process.on('exit', (code) => {
+      this.log(`🛑 Process exiting with code ${code}, ensuring cleanup...`);
+      this.forceKillGateway();
+    });
+
+    // Handle when parent process dies (useful for child processes)
+    process.on('disconnect', async () => {
+      this.log('🛑 Parent process disconnected, cleaning up...');
+      await this.cleanup();
+      process.exit(0);
+    });
+  }
+
+  private async cleanup(): Promise<void> {
+    try {
+      if (this.gatewayProcess) {
+        this.log('🧹 Cleaning up gateway process...');
+        await this.stopGateway();
+      }
+    } catch (error) {
+      console.error('❌ Error during cleanup:', error);
+      // Force kill as fallback
+      this.forceKillGateway();
+    }
+  }
+
+  private forceKillGateway(): void {
+    if (this.gatewayProcess && !this.gatewayProcess.killed) {
+      this.log('🔨 Force killing gateway process...');
+      try {
+        this.gatewayProcess.kill('SIGKILL');
+      } catch (error) {
+        console.error('❌ Error force killing gateway:', error);
+      }
+      this.gatewayProcess = null;
+      this.isReady = false;
+      this.isStarting = false;
     }
   }
 
@@ -240,26 +317,56 @@ export class IBGatewayManager {
   }
 
   async stopGateway(): Promise<void> {
-    if (this.gatewayProcess) {
-      console.log('🛑 Stopping IB Gateway...');
-      
+    if (!this.gatewayProcess) {
+      return;
+    }
+
+    this.log('🛑 Stopping IB Gateway...');
+    
+    return new Promise<void>((resolve) => {
+      const process = this.gatewayProcess!;
+      let resolved = false;
+
+      const cleanup = () => {
+        if (!resolved) {
+          resolved = true;
+          this.gatewayProcess = null;
+          this.isReady = false;
+          this.isStarting = false;
+          this.log('✅ IB Gateway stopped');
+          resolve();
+        }
+      };
+
+      // Listen for process exit
+      process.once('exit', cleanup);
+      process.once('close', cleanup);
+
       // Try graceful shutdown first
-      this.gatewayProcess.kill('SIGTERM');
-      
-      // Wait a bit for graceful shutdown
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Force kill if still running
-      if (this.gatewayProcess && !this.gatewayProcess.killed) {
-        console.log('🔨 Force killing IB Gateway...');
-        this.gatewayProcess.kill('SIGKILL');
+      try {
+        process.kill('SIGTERM');
+      } catch (error) {
+        this.log(`⚠️ Error sending SIGTERM: ${error}`);
       }
       
-      this.gatewayProcess = null;
-      this.isReady = false;
-      this.isStarting = false;
-      console.log('✅ IB Gateway stopped');
-    }
+      // Set up force kill timeout
+      const forceKillTimeout = setTimeout(() => {
+        if (process && !process.killed) {
+          this.log('🔨 Force killing IB Gateway...');
+          try {
+            process.kill('SIGKILL');
+          } catch (error) {
+            this.log(`⚠️ Error force killing: ${error}`);
+          }
+        }
+        cleanup();
+      }, 5000); // Increased timeout to 5 seconds
+
+      // Clean up timeout if process exits gracefully
+      process.once('exit', () => {
+        clearTimeout(forceKillTimeout);
+      });
+    });
   }
 
   isGatewayReady(): boolean {
