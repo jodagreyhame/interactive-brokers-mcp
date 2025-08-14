@@ -104,6 +104,7 @@ build/
 dist/
 !ib-gateway/clientportal.gw/dist/
 lib/
+!jre/**/lib/
 
 # Logs
 logs
