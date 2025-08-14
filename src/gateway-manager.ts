@@ -10,12 +10,69 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export class IBGatewayManager {
   private gatewayProcess: ChildProcess | null = null;
   private gatewayDir: string;
+  private jreDir: string;
   private isStarting = false;
   private isReady = false;
+  private useStderr: boolean;
 
   constructor() {
     // Gateway directory is relative to the project root (one level up from src)
     this.gatewayDir = path.join(__dirname, '../ib-gateway');
+    // Point to pre-bundled JRE based on platform
+    const platform = `${process.platform}-${process.arch}`;
+    this.jreDir = path.join(__dirname, '../jre', platform);
+    // Determine if we should use stderr for logging (STDIO mode)
+    this.useStderr = !(process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http'));
+  }
+
+  private log(message: string) {
+    if (this.useStderr) {
+      console.error(message);
+    } else {
+      console.log(message);
+    }
+  }
+
+  private getBundledJavaPath(): string {
+    const isWindows = process.platform === 'win32';
+    const javaExecutable = isWindows ? 'java.exe' : 'java';
+    const fs = require('fs');
+    
+    // First, try direct paths
+    const directPaths = [
+      path.join(this.jreDir, 'bin', javaExecutable),
+      path.join(this.jreDir, 'Contents', 'Home', 'bin', javaExecutable) // macOS alternative
+    ];
+    
+    for (const javaPath of directPaths) {
+      if (fs.existsSync(javaPath)) {
+        return javaPath;
+      }
+    }
+    
+    // Search for JDK directories dynamically
+    try {
+      const entries = fs.readdirSync(this.jreDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('jdk-')) {
+          // Check for macOS structure (jdk-*/Contents/Home/bin/java)
+          const macOSPath = path.join(this.jreDir, entry.name, 'Contents', 'Home', 'bin', javaExecutable);
+          if (fs.existsSync(macOSPath)) {
+            return macOSPath;
+          }
+          
+          // Check for Linux/Windows structure (jdk-*/bin/java)
+          const unixPath = path.join(this.jreDir, entry.name, 'bin', javaExecutable);
+          if (fs.existsSync(unixPath)) {
+            return unixPath;
+          }
+        }
+      }
+    } catch (e) {
+      // Fall through to error
+    }
+    
+    throw new Error(`Bundled Java runtime not found for platform: ${process.platform}-${process.arch}`);
   }
 
   async ensureGatewayExists(): Promise<void> {
@@ -24,7 +81,7 @@ export class IBGatewayManager {
     
     try {
       await fs.access(runScript);
-      console.log('✅ IB Gateway found at:', gatewayPath);
+      this.log('✅ IB Gateway found at:' + gatewayPath);
     } catch {
       throw new Error(`IB Gateway not found at ${gatewayPath}. Please ensure the gateway files are properly installed.`);
     }
@@ -32,7 +89,7 @@ export class IBGatewayManager {
 
   async startGateway(): Promise<void> {
     if (this.isStarting || this.isReady) {
-      console.log('Gateway is already starting or ready');
+      this.log('Gateway is already starting or ready');
       return;
     }
 
@@ -41,44 +98,50 @@ export class IBGatewayManager {
     try {
       await this.ensureGatewayExists();
       
-      const runScript = path.join(this.gatewayDir, 'clientportal.gw/bin/run.sh');
-      const configFile = 'root/conf.yaml'; // Use the default config in root directory
+      const bundledJavaPath = this.getBundledJavaPath();
+      const bundledJavaHome = path.dirname(path.dirname(bundledJavaPath));
+      
+      const configFile = 'root/conf.yaml';
+      const jarPath = path.join(this.gatewayDir, 'clientportal.gw/dist/ibgroup.web.core.iblink.router.clientportal.gw.jar');
+      const runtimePath = path.join(this.gatewayDir, 'clientportal.gw/build/lib/runtime/*');
+      const configDir = path.join(this.gatewayDir, 'clientportal.gw/root');
+      
+      const classpath = `${configDir}:${jarPath}:${runtimePath}`;
 
-      console.log('🚀 Starting IB Gateway...');
-      console.log('   Script:', runScript);
-      console.log('   Config:', configFile);
+      this.log('🚀 Starting IB Gateway with bundled JRE...');
+      this.log('   Java: ' + bundledJavaPath);
+      this.log('   Config: ' + configFile);
       
-      // Set environment variables for Java
-      const env = {
-        ...process.env,
-        JAVA_OPTS: '-Djava.awt.headless=true -Xmx512m',
-        // Ensure we have JAVA_HOME or try to detect it
-        JAVA_HOME: process.env.JAVA_HOME || '/usr/lib/jvm/default-java'
-      };
-
-      // Check if we're on Windows and use the .bat file instead
-      const isWindows = process.platform === 'win32';
-      const scriptPath = isWindows 
-        ? path.join(this.gatewayDir, 'clientportal.gw/bin/run.bat')
-        : runScript;
-      
-      const command = isWindows ? scriptPath : 'bash';
-      const args = isWindows ? [configFile] : [scriptPath, configFile];
-      
-      this.gatewayProcess = spawn(command, args, {
+      this.gatewayProcess = spawn(bundledJavaPath, [
+        '-server',
+        '-Djava.awt.headless=true',
+        '-Xmx512m',
+        '-Dvertx.disableDnsResolver=true',
+        '-Djava.net.preferIPv4Stack=true',
+        '-Dvertx.logger-delegate-factory-class-name=io.vertx.core.logging.SLF4JLogDelegateFactory',
+        '-Dnologback.statusListenerClass=ch.qos.logback.core.status.OnConsoleStatusListener',
+        '-Dnolog4j.debug=true',
+        '-Dnolog4j2.debug=true',
+        '-cp', classpath,
+        'ibgroup.web.core.clientportal.gw.GatewayStart',
+        '--conf', `../${configFile}`
+      ], {
         cwd: path.join(this.gatewayDir, 'clientportal.gw'),
-        env,
+        env: {
+          ...process.env,
+          JAVA_HOME: bundledJavaHome
+        },
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
       this.gatewayProcess.stdout?.on('data', (data) => {
         const output = data.toString().trim();
         if (output) {
-          console.log(`[Gateway] ${output}`);
+          this.log(`[Gateway] ${output}`);
           // Check for startup completion indicators
           if (output.includes('Server ready') || output.includes('started on port')) {
             this.isReady = true;
-            console.log('✅ IB Gateway is ready!');
+            this.log('✅ IB Gateway is ready!');
           }
         }
       });

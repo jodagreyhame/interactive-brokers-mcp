@@ -9,6 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { IBTools } from "./tools.js";
 import { IBGatewayManager } from "./gateway-manager.js";
+import { Logger } from "./logger.js";
 import express from "express";
 import cors from "cors";
 import { randomUUID } from "node:crypto";
@@ -41,7 +42,7 @@ class IBMCPServer {
   }
 
   private startMemoryMonitoring() {
-    console.log("[MEMORY] Starting memory monitoring...");
+    Logger.debug("Starting memory monitoring...");
     setInterval(() => {
       const memUsage = process.memoryUsage();
       const now = Date.now();
@@ -89,22 +90,40 @@ class IBMCPServer {
     // Set up shutdown handlers first
     this.setupShutdownHandlers();
     
-    // Start IB Gateway first
-    console.log('🚀 Starting Interactive Brokers MCP Server...');
-    console.log('📦 Starting IB Gateway...');
-    
-    try {
-      await this.gatewayManager.startGateway();
-      console.log('✅ IB Gateway started successfully');
-    } catch (error) {
-      console.error('❌ Failed to start IB Gateway:', error);
-      process.exit(1);
-    }
-    
     // Check if we should run HTTP server (for Cursor/development) or stdio (for production)
     const useHttp = process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http');
     
-    console.log(`📡 Starting MCP Server in ${useHttp ? 'HTTP' : 'STDIO'} mode...`);
+    // In STDIO mode, redirect all stdout to stderr to avoid interfering with MCP protocol
+    if (!useHttp) {
+      // Save original console.log
+      const originalLog = console.log;
+      console.log = (...args: any[]) => console.error(...args);
+      
+      // Restore console.log after startup for HTTP mode tools that might need it
+      process.nextTick(() => {
+        if (useHttp) {
+          console.log = originalLog;
+        }
+      });
+    }
+    
+    // Only log to console in HTTP mode, use stderr in STDIO mode
+    const log = useHttp ? console.log : (msg: string) => console.error(msg);
+    const logError = console.error;
+    
+    // Start IB Gateway first
+    log('🚀 Starting Interactive Brokers MCP Server...');
+    log('📦 Starting IB Gateway...');
+    
+    try {
+      await this.gatewayManager.startGateway();
+      log('✅ IB Gateway started successfully');
+    } catch (error) {
+      logError('❌ Failed to start IB Gateway:', error);
+      process.exit(1);
+    }
+    
+    log(`📡 Starting MCP Server in ${useHttp ? 'HTTP' : 'STDIO'} mode...`);
     
     if (useHttp) {
       await this.runHttpServer();
