@@ -44,8 +44,12 @@ const GetOrderStatusSchema = z.object({
 class IBMCPServer {
   private server: Server;
   private ibClient: IBClient;
+  private requestCount = 0;
+  private lastMemoryCheck = Date.now();
 
   constructor() {
+    // Monitor memory usage
+    this.startMemoryMonitoring();
     this.server = new Server(
       {
         name: "interactive-brokers-mcp",
@@ -64,6 +68,30 @@ class IBMCPServer {
     });
 
     this.setupHandlers();
+  }
+
+  private startMemoryMonitoring() {
+    console.log("[MEMORY] Starting memory monitoring...");
+    setInterval(() => {
+      const memUsage = process.memoryUsage();
+      const now = Date.now();
+      const timeDiff = now - this.lastMemoryCheck;
+      
+      console.log(`[MEMORY] Memory usage - RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB, Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, Heap Total: ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB, External: ${Math.round(memUsage.external / 1024 / 1024)}MB`);
+      console.log(`[MEMORY] Request count: ${this.requestCount}, Requests/sec: ${(this.requestCount / (timeDiff / 1000)).toFixed(2)}`);
+      
+      // Force garbage collection if available
+      if (global.gc) {
+        console.log("[MEMORY] Running garbage collection...");
+        global.gc();
+      }
+      
+      // Reset request count periodically
+      if (timeDiff > 60000) { // Reset every minute
+        this.requestCount = 0;
+        this.lastMemoryCheck = now;
+      }
+    }, 5000); // Check every 5 seconds
   }
 
   private setupHandlers() {
@@ -169,11 +197,20 @@ class IBMCPServer {
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+      const requestId = Math.random().toString(36).substr(2, 9);
+      this.requestCount++;
+      
+      console.log(`[MCP-${requestId}] Received tool call: ${name} (total requests: ${this.requestCount})`, {
+        arguments: args,
+        timestamp: new Date().toISOString()
+      });
 
       try {
         switch (name) {
           case "get_account_info": {
+            console.log(`[MCP-${requestId}] Executing get_account_info...`);
             const result = await this.ibClient.getAccountInfo();
+            console.log(`[MCP-${requestId}] get_account_info completed successfully, result size: ${JSON.stringify(result).length} chars`);
             return {
               content: [
                 {
@@ -243,6 +280,7 @@ class IBMCPServer {
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
+        console.error(`[MCP-${requestId}] Tool call failed for ${name}:`, error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         return {
           content: [
