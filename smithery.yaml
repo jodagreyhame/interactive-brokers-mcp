@@ -1,0 +1,21 @@
+version: 1
+start:
+  command: ["/start-services.sh"]
+  port: 3000
+build:
+  context: .
+  dockerfile: Dockerfile
+environment:
+  # Gateway Configuration
+  - IB_GATEWAY_HOST=localhost
+  - IB_GATEWAY_PORT=5000
+  # Application Configuration
+  - NODE_ENV=production
+  - MCP_SERVER_PORT=3000
+  - LOG_LEVEL=info
+  - TZ=UTC
+healthcheck:
+  path: /health
+  interval: 30s
+  timeout: 10s
+  retries: 3
