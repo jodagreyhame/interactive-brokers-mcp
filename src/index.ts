@@ -6,44 +6,15 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-  Tool,
 } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
-import { IBClient } from "./ib-client.js";
-import { config } from "./config.js";
+import { IBTools } from "./tools.js";
 import express from "express";
 import cors from "cors";
 import { randomUUID } from "node:crypto";
 
-// Tool schemas
-const GetAccountInfoSchema = z.object({});
-
-const GetPositionsSchema = z.object({
-  accountId: z.string().optional(),
-});
-
-const GetMarketDataSchema = z.object({
-  symbol: z.string(),
-  exchange: z.string().optional(),
-});
-
-const PlaceOrderSchema = z.object({
-  accountId: z.string(),
-  symbol: z.string(),
-  action: z.enum(["BUY", "SELL"]),
-  orderType: z.enum(["MKT", "LMT", "STP"]),
-  quantity: z.number(),
-  price: z.number().optional(),
-  stopPrice: z.number().optional(),
-});
-
-const GetOrderStatusSchema = z.object({
-  orderId: z.string(),
-});
-
 class IBMCPServer {
   private server: Server;
-  private ibClient: IBClient;
+  private tools: IBTools;
   private requestCount = 0;
   private lastMemoryCheck = Date.now();
 
@@ -62,11 +33,7 @@ class IBMCPServer {
       }
     );
 
-    this.ibClient = new IBClient({
-      host: config.IB_GATEWAY_HOST,
-      port: config.IB_GATEWAY_PORT,
-    });
-
+    this.tools = new IBTools();
     this.setupHandlers();
   }
 
@@ -97,101 +64,7 @@ class IBMCPServer {
   private setupHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: [
-          {
-            name: "get_account_info",
-            description: "Get account information and balances",
-            inputSchema: {
-              type: "object",
-              properties: {},
-            },
-          },
-          {
-            name: "get_positions",
-            description: "Get current positions for an account",
-            inputSchema: {
-              type: "object",
-              properties: {
-                accountId: {
-                  type: "string",
-                  description: "Account ID (optional, uses default if not provided)",
-                },
-              },
-            },
-          },
-          {
-            name: "get_market_data",
-            description: "Get real-time market data for a symbol",
-            inputSchema: {
-              type: "object",
-              properties: {
-                symbol: {
-                  type: "string",
-                  description: "Trading symbol (e.g., AAPL, TSLA)",
-                },
-                exchange: {
-                  type: "string",
-                  description: "Exchange (optional)",
-                },
-              },
-              required: ["symbol"],
-            },
-          },
-          {
-            name: "place_order",
-            description: "Place a trading order",
-            inputSchema: {
-              type: "object",
-              properties: {
-                accountId: {
-                  type: "string",
-                  description: "Account ID",
-                },
-                symbol: {
-                  type: "string",
-                  description: "Trading symbol",
-                },
-                action: {
-                  type: "string",
-                  enum: ["BUY", "SELL"],
-                  description: "Order action",
-                },
-                orderType: {
-                  type: "string",
-                  enum: ["MKT", "LMT", "STP"],
-                  description: "Order type",
-                },
-                quantity: {
-                  type: "number",
-                  description: "Number of shares",
-                },
-                price: {
-                  type: "number",
-                  description: "Limit price (required for LMT orders)",
-                },
-                stopPrice: {
-                  type: "number",
-                  description: "Stop price (required for STP orders)",
-                },
-              },
-              required: ["accountId", "symbol", "action", "orderType", "quantity"],
-            },
-          },
-          {
-            name: "get_order_status",
-            description: "Get the status of a specific order",
-            inputSchema: {
-              type: "object",
-              properties: {
-                orderId: {
-                  type: "string",
-                  description: "Order ID",
-                },
-              },
-              required: ["orderId"],
-            },
-          },
-        ] as Tool[],
+        tools: this.tools.getToolDefinitions(),
       };
     });
 
@@ -205,93 +78,7 @@ class IBMCPServer {
         timestamp: new Date().toISOString()
       });
 
-      try {
-        switch (name) {
-          case "get_account_info": {
-            console.log(`[MCP-${requestId}] Executing get_account_info...`);
-            const result = await this.ibClient.getAccountInfo();
-            console.log(`[MCP-${requestId}] get_account_info completed successfully, result size: ${JSON.stringify(result).length} chars`);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          case "get_positions": {
-            const parsed = GetPositionsSchema.parse(args);
-            const result = await this.ibClient.getPositions(parsed.accountId);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          case "get_market_data": {
-            const parsed = GetMarketDataSchema.parse(args);
-            const result = await this.ibClient.getMarketData(
-              parsed.symbol,
-              parsed.exchange
-            );
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          case "place_order": {
-            const parsed = PlaceOrderSchema.parse(args);
-            const result = await this.ibClient.placeOrder(parsed);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          case "get_order_status": {
-            const parsed = GetOrderStatusSchema.parse(args);
-            const result = await this.ibClient.getOrderStatus(parsed.orderId);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          default:
-            throw new Error(`Unknown tool: ${name}`);
-        }
-      } catch (error) {
-        console.error(`[MCP-${requestId}] Tool call failed for ${name}:`, error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${errorMessage}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+      return await this.tools.handleToolCall(name, args);
     });
   }
 
