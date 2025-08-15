@@ -110,7 +110,6 @@ lib/
 temp-*
 *.tar.gz
 *.zip
-build-*.sh
 
 # Logs
 logs
