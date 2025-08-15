@@ -1,33 +1,38 @@
-// Centralized logging utility that respects MCP STDIO mode
+// MCP-safe logging utility that only uses stderr for actual errors
 export class Logger {
-  private static useStderr = !(process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http'));
+  private static isStdioMode = !(process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http'));
 
+  // For informational messages - suppressed in STDIO mode to avoid stderr pollution
   static log(message: string, ...args: any[]) {
-    if (Logger.useStderr) {
-      console.error(message, ...args);
-    } else {
+    if (!Logger.isStdioMode) {
       console.log(message, ...args);
     }
+    // In STDIO mode, completely suppress to avoid JSON-RPC interference
   }
 
+  // Always log actual errors
   static error(message: string, ...args: any[]) {
-    console.error(message, ...args);
+    console.error(`[ERROR] ${message}`, ...args);
   }
 
+  // Warnings only in non-STDIO mode
   static warn(message: string, ...args: any[]) {
-    console.error(message, ...args);
-  }
-
-  static info(message: string, ...args: any[]) {
-    if (Logger.useStderr) {
-      console.error(message, ...args);
-    } else {
-      console.log(message, ...args);
+    if (!Logger.isStdioMode) {
+      console.warn(`[WARN] ${message}`, ...args);
     }
   }
 
-  // For development debugging - always goes to stderr
+  // Info messages - suppressed in STDIO mode
+  static info(message: string, ...args: any[]) {
+    if (!Logger.isStdioMode) {
+      console.log(`[INFO] ${message}`, ...args);
+    }
+  }
+
+  // Debug only when explicitly enabled and not in STDIO mode
   static debug(message: string, ...args: any[]) {
-    console.error(`[DEBUG] ${message}`, ...args);
+    if (process.env.DEBUG && !Logger.isStdioMode) {
+      console.log(`[DEBUG] ${message}`, ...args);
+    }
   }
 }

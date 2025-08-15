@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { Logger } from './logger.js';
 // No more runtime builder imports needed
 
 const require = createRequire(import.meta.url);
@@ -30,11 +31,8 @@ export class IBGatewayManager {
   }
 
   private log(message: string) {
-    if (this.useStderr) {
-      console.error(message);
-    } else {
-      console.log(message);
-    }
+    // Use Logger for MCP-safe logging
+    Logger.info(message);
   }
 
   private registerCleanupHandlers(): void {
@@ -58,13 +56,13 @@ export class IBGatewayManager {
 
     // Handle uncaught exceptions and unhandled rejections
     process.on('uncaughtException', async (error) => {
-      console.error('❌ Uncaught Exception:', error);
+      Logger.error('❌ Uncaught Exception:', error);
       await this.cleanup();
       process.exit(1);
     });
 
     process.on('unhandledRejection', async (reason, promise) => {
-      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      Logger.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
       await this.cleanup();
       process.exit(1);
     });
@@ -90,7 +88,7 @@ export class IBGatewayManager {
         await this.stopGateway();
       }
     } catch (error) {
-      console.error('❌ Error during cleanup:', error);
+      Logger.error('❌ Error during cleanup:', error);
       // Force kill as fallback
       this.forceKillGateway();
     }
@@ -102,7 +100,7 @@ export class IBGatewayManager {
       try {
         this.gatewayProcess.kill('SIGKILL');
       } catch (error) {
-        console.error('❌ Error force killing gateway:', error);
+        Logger.error('❌ Error force killing gateway:', error);
       }
       this.gatewayProcess = null;
       this.isReady = false;
@@ -198,12 +196,12 @@ export class IBGatewayManager {
       this.gatewayProcess.stderr?.on('data', (data) => {
         const output = data.toString().trim();
         if (output && !output.includes('WARNING')) {
-          console.error(`[Gateway Error] ${output}`);
+          Logger.error(`[Gateway Error] ${output}`);
         }
       });
 
       this.gatewayProcess.on('error', (error) => {
-        console.error('❌ Gateway process error:', error.message);
+        Logger.error('❌ Gateway process error:', error.message);
         this.isStarting = false;
         this.isReady = false;
       });

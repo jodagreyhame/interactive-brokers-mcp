@@ -5,6 +5,7 @@ import { IBClient } from "./ib-client.js";
 import { IBGatewayManager } from "./gateway-manager.js";
 import { config } from "./config.js";
 import { registerTools } from "./tools.js";
+import { Logger } from "./logger.js";
 
 // Optional: Define configuration schema for session configuration
 export const configSchema = z.object({
@@ -21,11 +22,11 @@ async function initializeGateway() {
     
     
       try {
-        console.error('🚀 Starting Interactive Brokers Gateway...');
+        Logger.info('🚀 Starting Interactive Brokers Gateway...');
         await gatewayManager.startGateway();
-        console.error('✅ IB Gateway started successfully');
+        Logger.info('✅ IB Gateway started successfully');
       } catch (error) {
-        console.error('❌ Failed to start IB Gateway:', error);
+        Logger.error('❌ Failed to start IB Gateway:', error);
         throw error;
       }
     
@@ -37,11 +38,11 @@ async function initializeGateway() {
 async function cleanupGateway() {
   if (gatewayManager) {
     try {
-      console.error('🛑 Shutting down IB Gateway...');
+      Logger.info('🛑 Shutting down IB Gateway...');
       await gatewayManager.stopGateway();
-      console.error('✅ IB Gateway shutdown complete');
+      Logger.info('✅ IB Gateway shutdown complete');
     } catch (error) {
-      console.error('Error stopping gateway:', error);
+      Logger.error('Error stopping gateway:', error);
     }
     gatewayManager = null;
   }
@@ -51,7 +52,7 @@ async function cleanupGateway() {
 process.on('SIGINT', cleanupGateway);
 process.on('SIGTERM', cleanupGateway);
 process.on('exit', () => {
-  console.error('🛑 Process exiting...');
+  Logger.info('🛑 Process exiting...');
 });
 
 // Check if this module is being run directly (for stdio compatibility)
@@ -71,7 +72,7 @@ function IBMCP({}: { config: z.infer<typeof configSchema> }) {
 
   // Initialize gateway on first server creation
   initializeGateway().catch(error => {
-    console.error('Failed to initialize gateway:', error);
+    Logger.error('Failed to initialize gateway:', error);
   });
 
   // Create MCP server
