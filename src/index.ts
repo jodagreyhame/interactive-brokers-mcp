@@ -9,7 +9,11 @@ import { Logger } from "./logger.js";
 
 // Optional: Define configuration schema for session configuration
 export const configSchema = z.object({
-  
+  // Authentication configuration
+  IB_USERNAME: z.string().optional(),
+  IB_PASSWORD_AUTH: z.string().optional(),
+  IB_AUTH_TIMEOUT: z.number().optional(),
+  IB_HEADLESS_MODE: z.boolean().optional(),
 });
 
 // Global gateway manager instance
@@ -66,11 +70,17 @@ const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
                      process.argv[1]?.endsWith('ib-mcp') ||
                      process.argv[1]?.includes('/.bin/ib-mcp');
 
-function IBMCP({}: { config: z.infer<typeof configSchema> }) {
+function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> }) {
+  // Merge user config with environment config
+  const mergedConfig = {
+    ...config,
+    ...userConfig
+  };
+
   // Create IB Client with default port initially - this will be updated once gateway starts
   const ibClient = new IBClient({
-    host: config.IB_GATEWAY_HOST,
-    port: config.IB_GATEWAY_PORT,
+    host: mergedConfig.IB_GATEWAY_HOST,
+    port: mergedConfig.IB_GATEWAY_PORT,
   });
 
   // Initialize gateway on first server creation and update client port
@@ -82,10 +92,13 @@ function IBMCP({}: { config: z.infer<typeof configSchema> }) {
   const server = new McpServer({
     name: "interactive-brokers-mcp",
     version: "1.0.0",
+    capabilities: {
+      logging: {},
+    }
   });
 
-  // Register all tools
-  registerTools(server, ibClient, gatewayManager || undefined);
+  // Register all tools with merged config
+  registerTools(server, ibClient, gatewayManager || undefined, mergedConfig);
 
   return server.server;
 }
@@ -94,6 +107,9 @@ if (isMainModule) {
   // Suppress known problematic outputs that might interfere with JSON-RPC
   process.env.SUPPRESS_LOAD_MESSAGE = '1';
   process.env.NO_UPDATE_NOTIFIER = '1';
+  
+  // Log startup information
+  Logger.logStartup();
   
   const stdioTransport = new StdioServerTransport();
   const server = IBMCP({config: {}})

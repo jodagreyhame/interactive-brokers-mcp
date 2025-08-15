@@ -1,10 +1,10 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, exec } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { Logger } from './logger.js';
-import * as net from 'net';
+import os from 'os';
 // No more runtime builder imports needed
 
 const require = createRequire(import.meta.url);
@@ -39,16 +39,41 @@ export class IBGatewayManager {
 
   private async isPortAvailable(port: number): Promise<boolean> {
     return new Promise((resolve) => {
-      const server = net.createServer();
+      const platform = os.platform();
+      let command: string;
       
-      server.listen(port, '127.0.0.1', () => {
-        server.close(() => {
+      // Use OS-specific commands to check if port is in use
+      switch (platform) {
+        case 'win32':
+          // Windows: Use netstat to check if port is listening
+          command = `netstat -an | findstr :${port}`;
+          break;
+        case 'darwin':
+        case 'linux':
+          // macOS/Linux: Use lsof to check if port is in use
+          command = `lsof -i :${port}`;
+          break;
+        default:
+          // Fallback for other platforms
+          command = `netstat -an | grep :${port}`;
+          break;
+      }
+      
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          // Command failed or no processes found using the port - port is available
           resolve(true);
-        });
-      });
-      
-      server.on('error', () => {
-        resolve(false);
+        } else {
+          // Command succeeded and found processes using the port - port is not available
+          const output = stdout.trim();
+          if (output === '') {
+            // No output means port is available
+            resolve(true);
+          } else {
+            // Output found means port is in use
+            resolve(false);
+          }
+        }
       });
     });
   }

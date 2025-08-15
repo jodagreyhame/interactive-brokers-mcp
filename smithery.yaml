@@ -1,0 +1,28 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: http
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    properties:
+      IB_HEADLESS_MODE:
+        type: boolean
+        description: "Enable headless authentication (default: false)"
+        default: false
+      IB_USERNAME:
+        type: string
+        description: "IB username for headless authentication"
+      IB_PASSWORD_AUTH:
+        type: string
+        description: "IB password for headless authentication"
+        format: "password"
+      IB_AUTH_TIMEOUT:
+        type: number
+        description: "Authentication timeout in milliseconds (default: 60000)"
+        default: 60000
+  exampleConfig:
+    IB_HEADLESS_MODE: true
+    IB_USERNAME: "your_ib_username"
+    IB_PASSWORD_AUTH: "your_ib_password"
+    IB_AUTH_TIMEOUT: 60000

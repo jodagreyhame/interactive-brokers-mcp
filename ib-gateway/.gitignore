@@ -16,4 +16,9 @@ logs/
 # Ignore macOS system files
 .DS_Store
 .DS_Store?
+
+# Ignore Vert.x cache directories and files
 vertx/**/*
+.vertx/
+**/.vertx/
+*.vertx

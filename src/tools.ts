@@ -3,9 +3,53 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { IBClient } from "./ib-client.js";
 import { IBGatewayManager } from "./gateway-manager.js";
 import { config } from "./config.js";
+import { HeadlessAuthenticator, HeadlessAuthConfig } from "./headless-auth.js";
 import open from "open";
 
-export function registerTools(server: McpServer, ibClient: IBClient, gatewayManager?: IBGatewayManager) {
+export function registerTools(server: McpServer, ibClient: IBClient, gatewayManager?: IBGatewayManager, userConfig?: any) {
+  // Use merged config or fall back to default config
+  const effectiveConfig = userConfig || config;
+  
+  // Authentication management
+  async function ensureAuth(): Promise<void> {
+    // Check if already authenticated
+    const isAuthenticated = await ibClient.checkAuthenticationStatus();
+    if (isAuthenticated) {
+      return; // Already authenticated
+    }
+
+    // If in headless mode, start automatic headless authentication
+    if (effectiveConfig.IB_HEADLESS_MODE) {
+      const port = gatewayManager ? gatewayManager.getCurrentPort() : effectiveConfig.IB_GATEWAY_PORT;
+      const authUrl = `https://${effectiveConfig.IB_GATEWAY_HOST}:${port}`;
+      
+      // Validate that we have credentials for headless mode
+      if (!effectiveConfig.IB_USERNAME || !effectiveConfig.IB_PASSWORD_AUTH) {
+        throw new Error("Headless mode enabled but authentication credentials missing. Please set IB_USERNAME and IB_PASSWORD_AUTH environment variables.");
+      }
+
+      const authConfig: HeadlessAuthConfig = {
+        url: authUrl,
+        username: effectiveConfig.IB_USERNAME,
+        password: effectiveConfig.IB_PASSWORD_AUTH,
+        timeout: effectiveConfig.IB_AUTH_TIMEOUT,
+        ibClient: ibClient, // Pass the IB client for authentication checking
+      };
+
+      const authenticator = new HeadlessAuthenticator();
+      const result = await authenticator.authenticate(authConfig);
+
+      if (!result.success) {
+        throw new Error(`Authentication failed: ${result.message}`);
+      }
+    } else {
+      // In non-headless mode, throw an error asking user to authenticate manually
+      const port = gatewayManager ? gatewayManager.getCurrentPort() : effectiveConfig.IB_GATEWAY_PORT;
+      const authUrl = `https://${effectiveConfig.IB_GATEWAY_HOST}:${port}`;
+      throw new Error(`Authentication required. Please use the 'authenticate' tool to complete the authentication process at ${authUrl}.`);
+    }
+  }
+
   // Helper function to check for authentication errors
   function isAuthenticationError(error: any): boolean {
     if (!error) return false;
@@ -27,22 +71,98 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
   }
 
   function getAuthenticationErrorMessage(): string {
-    const port = gatewayManager ? gatewayManager.getCurrentPort() : config.IB_GATEWAY_PORT;
-    const authUrl = `https://${config.IB_GATEWAY_HOST}:${port}`;
-    return `Authentication required. Please use the 'authenticate' tool to open the Interactive Brokers web interface at ${authUrl} and complete the authentication process.`;
+    const port = gatewayManager ? gatewayManager.getCurrentPort() : effectiveConfig.IB_GATEWAY_PORT;
+    const authUrl = `https://${effectiveConfig.IB_GATEWAY_HOST}:${port}`;
+    const mode = effectiveConfig.IB_HEADLESS_MODE ? "headless mode" : "browser mode";
+    return `Authentication required. Please use the 'authenticate' tool to complete the authentication process (configured for ${mode}) at ${authUrl}.`;
   }
 
-  // Add authenticate tool
-  server.tool(
-    "authenticate",
-    "Open Interactive Brokers authentication web interface",
-    {
-      random_string: z.string().optional().describe("Dummy parameter for no-parameter tools"),
-    },
-    async ({ random_string }) => {
-      const port = gatewayManager ? gatewayManager.getCurrentPort() : config.IB_GATEWAY_PORT;
-      const authUrl = `https://${config.IB_GATEWAY_HOST}:${port}`;
+  // Add authenticate tool only if not in headless mode
+  if (!effectiveConfig.IB_HEADLESS_MODE) {
+    server.tool(
+      "authenticate",
+      "Authenticate with Interactive Brokers (uses headless mode if enabled in config)",
+      {
+        random_string: z.string().optional().describe("Dummy parameter for no-parameter tools"),
+      },
+      async ({ random_string }) => {
+      const port = gatewayManager ? gatewayManager.getCurrentPort() : effectiveConfig.IB_GATEWAY_PORT;
+      const authUrl = `https://${effectiveConfig.IB_GATEWAY_HOST}:${port}`;
       
+      // Check if headless mode is enabled in config
+      if (effectiveConfig.IB_HEADLESS_MODE) {
+        try {
+          // Use headless authentication
+          const authConfig: HeadlessAuthConfig = {
+            url: authUrl,
+            username: effectiveConfig.IB_USERNAME,
+            password: effectiveConfig.IB_PASSWORD_AUTH,
+            timeout: effectiveConfig.IB_AUTH_TIMEOUT,
+          };
+
+          // Validate that we have credentials for headless mode
+          if (!authConfig.username || !authConfig.password) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    message: "Headless mode enabled but authentication credentials missing",
+                    error: "Please set IB_USERNAME and IB_PASSWORD_AUTH environment variables for headless authentication",
+                    authUrl: authUrl,
+                    instructions: [
+                      "Set environment variables: IB_USERNAME and IB_PASSWORD_AUTH",
+                      "Or disable headless mode by setting IB_HEADLESS_MODE=false",
+                      "Then try authentication again"
+                    ]
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          const authenticator = new HeadlessAuthenticator();
+          const result = await authenticator.authenticate(authConfig);
+
+          // Authentication completed (success or failure) - no separate 2FA handling needed
+          await authenticator.close();
+          
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ...result,
+                  authUrl: authUrl,
+                  mode: "headless",
+                  note: "Headless authentication completed automatically"
+                }, null, 2),
+              },
+            ],
+          };
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  success: false,
+                  message: "Headless authentication failed, falling back to manual browser authentication",
+                  error: errorMessage,
+                  authUrl: authUrl,
+                  mode: "fallback_to_manual",
+                  note: "Opening browser for manual authentication..."
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+      
+      // Original browser-based authentication (when headless mode is disabled or as fallback)
       try {
         await open(authUrl);
         
@@ -53,6 +173,7 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
               text: JSON.stringify({
                 message: "Interactive Brokers authentication interface opened in your browser",
                 authUrl: authUrl,
+                mode: "browser",
                 instructions: [
                   "1. The authentication page has been opened in your default browser",
                   "2. Accept any SSL certificate warnings (this is normal for localhost)",
@@ -74,6 +195,7 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
               text: JSON.stringify({
                 message: "Opening Interactive Brokers authentication interface...",
                 authUrl: authUrl,
+                mode: "manual",
                 instructions: [
                   "1. Open the authentication URL below in your browser:",
                   `   ${authUrl}`,
@@ -90,17 +212,21 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
         };
       }
     }
-  );
-
+    );
+  }
+  
   // Add get_account_info tool
   server.tool(
     "get_account_info",
     "Get account information and balances",
-    {
-      random_string: z.string().describe("Dummy parameter for no-parameter tools"),
-    },
-    async ({ random_string }) => {
+    {},
+    async ({}) => {
       try {
+        // Ensure authentication in headless mode
+        if (effectiveConfig.IB_HEADLESS_MODE) {
+          await ensureAuth();
+        }
+        
         const result = await ibClient.getAccountInfo();
         return {
           content: [
@@ -144,6 +270,11 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
     },
     async ({ accountId }) => {
       try {
+        // Ensure authentication in headless mode
+        if (effectiveConfig.IB_HEADLESS_MODE) {
+          await ensureAuth();
+        }
+        
         const result = await ibClient.getPositions(accountId);
         return {
           content: [
@@ -184,10 +315,15 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
     "Get real-time market data for a symbol",
     {
       symbol: z.string().describe("Trading symbol (e.g., AAPL, TSLA)"),
-      exchange: z.string().optional().describe("Exchange (optional)"),
+      exchange: z.string().optional().describe("Exchange (optional), but required for prices"),
     },
     async ({ symbol, exchange }) => {
       try {
+        // Ensure authentication in headless mode
+        if (effectiveConfig.IB_HEADLESS_MODE) {
+          await ensureAuth();
+        }
+        
         const result = await ibClient.getMarketData(symbol, exchange);
         return {
           content: [
@@ -237,6 +373,11 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
     },
     async ({ accountId, symbol, action, orderType, quantity, price, stopPrice }) => {
       try {
+        // Ensure authentication in headless mode
+        if (effectiveConfig.IB_HEADLESS_MODE) {
+          await ensureAuth();
+        }
+        
         const result = await ibClient.placeOrder({
           accountId,
           symbol,
@@ -288,6 +429,11 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
     },
     async ({ orderId }) => {
       try {
+        // Ensure authentication in headless mode
+        if (effectiveConfig.IB_HEADLESS_MODE) {
+          await ensureAuth();
+        }
+        
         const result = await ibClient.getOrderStatus(orderId);
         return {
           content: [
