@@ -1,6 +1,6 @@
 {
   "name": "interactive-brokers-mcp",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "MCP server for Interactive Brokers API integration",
   "type": "module",
   "main": "dist/index.js",
