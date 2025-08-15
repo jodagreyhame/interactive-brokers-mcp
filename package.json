@@ -1,6 +1,6 @@
 {
   "name": "interactive-brokers-mcp",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "MCP server for Interactive Brokers API integration",
   "type": "module",
   "main": "dist/index.js",
@@ -11,6 +11,7 @@
   "files": [
     "dist/**/*",
     "ib-gateway/**/*",
+    "runtime/**/*",
     "README.md",
     "LICENSE"
   ],
