@@ -237,19 +237,19 @@ export class IBGatewayManager {
       });
 
       this.gatewayProcess.on('exit', (code, signal) => {
-        console.log(`🛑 Gateway process exited with code ${code}, signal ${signal}`);
+        this.log(`🛑 Gateway process exited with code ${code}, signal ${signal}`);
         this.gatewayProcess = null;
         this.isStarting = false;
         this.isReady = false;
       });
 
       // Wait for the gateway to be ready
-      console.log('⏳ Waiting for IB Gateway to start...');
+      this.log('⏳ Waiting for IB Gateway to start...');
       await this.waitForGateway();
       
       this.isStarting = false;
       this.isReady = true;
-      console.log('🎉 IB Gateway started successfully!');
+      this.log('🎉 IB Gateway started successfully!');
 
     } catch (error) {
       this.isStarting = false;
@@ -267,7 +267,7 @@ export class IBGatewayManager {
         // Try to connect to the gateway port
         const response = await this.checkGatewayHealth();
         if (response) {
-          console.log('✅ IB Gateway is responding on port 5000');
+          this.log('✅ IB Gateway is responding on port 5000');
           return;
         }
       } catch (error) {
@@ -278,7 +278,7 @@ export class IBGatewayManager {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       if (attempts % 5 === 0) {
-        console.log(`⏳ Still waiting for gateway... (${attempts}/${maxAttempts})`);
+        this.log(`⏳ Still waiting for gateway... (${attempts}/${maxAttempts})`);
       }
     }
 
