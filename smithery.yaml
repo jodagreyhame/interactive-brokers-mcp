@@ -1,0 +1,23 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: http
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    properties:
+      headless:
+        type: boolean
+        description: "Enable headless authentication (default: false)"
+        default: false
+      username:
+        type: string
+        description: "IB username for headless authentication"
+      password:
+        type: string
+        description: "IB password for headless authentication"
+        format: "password"
+  exampleConfig:
+    headless: true
+    username: "your_ib_username"
+    password: "your_ib_password"

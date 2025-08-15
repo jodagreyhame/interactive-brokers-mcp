@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import https from "https";
+import { Logger } from "./logger";
 
 interface ExtendedAxiosRequestConfig extends AxiosRequestConfig {
   metadata?: { requestId: string };
@@ -50,7 +51,7 @@ export class IBClient {
     // Add request interceptor to ensure authentication and log requests
     this.client.interceptors.request.use(async (config) => {
       const requestId = Math.random().toString(36).substr(2, 9);
-      console.log(`[REQUEST-${requestId}] ${config.method?.toUpperCase()} ${config.url}`, {
+      Logger.log(`[REQUEST-${requestId}] ${config.method?.toUpperCase()} ${config.url}`, {
         baseURL: config.baseURL,
         timeout: config.timeout,
         headers: config.headers,
@@ -58,7 +59,7 @@ export class IBClient {
       });
       
       if (!this.isAuthenticated) {
-        console.log(`[REQUEST-${requestId}] Not authenticated, authenticating... (attempt ${this.authAttempts + 1}/${this.maxAuthAttempts})`);
+        Logger.log(`[REQUEST-${requestId}] Not authenticated, authenticating... (attempt ${this.authAttempts + 1}/${this.maxAuthAttempts})`);
         if (this.authAttempts >= this.maxAuthAttempts) {
           throw new Error(`Max authentication attempts (${this.maxAuthAttempts}) exceeded`);
         }
@@ -74,7 +75,7 @@ export class IBClient {
     this.client.interceptors.response.use(
       (response) => {
         const requestId = (response.config as ExtendedAxiosRequestConfig).metadata?.requestId || 'unknown';
-        console.log(`[RESPONSE-${requestId}] ${response.status} ${response.statusText}`, {
+        Logger.log(`[RESPONSE-${requestId}] ${response.status} ${response.statusText}`, {
           url: response.config.url,
           responseSize: JSON.stringify(response.data).length,
           headers: response.headers,
@@ -84,7 +85,7 @@ export class IBClient {
       },
       (error) => {
         const requestId = (error.config as ExtendedAxiosRequestConfig)?.metadata?.requestId || 'unknown';
-        console.error(`[ERROR-${requestId}] Request failed:`, {
+          Logger.error(`[ERROR-${requestId}] Request failed:`, {
           url: error.config?.url,
           status: error.response?.status,
           statusText: error.response?.statusText,
@@ -98,7 +99,7 @@ export class IBClient {
 
   updatePort(newPort: number): void {
     if (this.config.port !== newPort) {
-      console.log(`[CLIENT] Updating port from ${this.config.port} to ${newPort}`);
+      Logger.log(`[CLIENT] Updating port from ${this.config.port} to ${newPort}`);
       this.config.port = newPort;
       this.isAuthenticated = false; // Force re-authentication with new port
       this.authAttempts = 0; // Reset auth attempts
@@ -106,8 +107,41 @@ export class IBClient {
     }
   }
 
+  /**
+   * Check authentication status with IB Gateway without triggering automatic authentication
+   */
+  async checkAuthenticationStatus(): Promise<boolean> {
+    try {
+      Logger.log("[AUTH-CHECK] Checking authentication status...");
+      
+      // Create a new axios instance without interceptors to avoid triggering authentication
+      const authClient = axios.create({
+        baseURL: this.baseUrl,
+        timeout: 30000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+        }),
+      });
+      
+      const response = await authClient.get("/iserver/auth/status");
+      Logger.log("[AUTH-CHECK] Auth status response:", response.data);
+      
+      const authenticated = response.data.authenticated === true;
+      this.isAuthenticated = authenticated;
+      
+      if (authenticated) {
+        this.authAttempts = 0; // Reset auth attempts on successful check
+      }
+      
+      return authenticated;
+    } catch (error) {
+      this.isAuthenticated = false;
+      return false;
+    }
+  }
+
   private async authenticate(): Promise<void> {
-    console.log(`[AUTH] Starting authentication process... (attempt ${this.authAttempts + 1}/${this.maxAuthAttempts})`);
+    Logger.log(`[AUTH] Starting authentication process... (attempt ${this.authAttempts + 1}/${this.maxAuthAttempts})`);
     this.authAttempts++;
     
     try {
@@ -121,25 +155,25 @@ export class IBClient {
       });
       
       // Check if already authenticated
-      console.log("[AUTH] Checking authentication status...");
+      Logger.log("[AUTH] Checking authentication status...");
       const response = await authClient.get("/iserver/auth/status");
-      console.log("[AUTH] Auth status response:", response.data);
+      Logger.log("[AUTH] Auth status response:", response.data);
       
       if (response.data.authenticated) {
-        console.log("[AUTH] Already authenticated");
+        Logger.log("[AUTH] Already authenticated");
         this.isAuthenticated = true;
         this.authAttempts = 0; // Reset on success
         return;
       }
 
       // Re-authenticate if needed
-      console.log("[AUTH] Re-authenticating...");
+      Logger.log("[AUTH] Re-authenticating...");
       await authClient.post("/iserver/reauthenticate");
-      console.log("[AUTH] Re-authentication successful");
+      Logger.log("[AUTH] Re-authentication successful");
       this.isAuthenticated = true;
       this.authAttempts = 0; // Reset on success
     } catch (error) {
-      console.error(`[AUTH] Authentication failed (attempt ${this.authAttempts}/${this.maxAuthAttempts}):`, error);
+      Logger.error(`[AUTH] Authentication failed (attempt ${this.authAttempts}/${this.maxAuthAttempts}):`, error);
       if (this.authAttempts >= this.maxAuthAttempts) {
         throw new Error(`Failed to authenticate with IB Gateway after ${this.maxAuthAttempts} attempts`);
       }
@@ -148,28 +182,28 @@ export class IBClient {
   }
 
   async getAccountInfo(): Promise<any> {
-    console.log("[ACCOUNT-INFO] Starting getAccountInfo request...");
+    Logger.log("[ACCOUNT-INFO] Starting getAccountInfo request...");
     try {
-      console.log("[ACCOUNT-INFO] Fetching portfolio accounts...");
+      Logger.log("[ACCOUNT-INFO] Fetching portfolio accounts...");
       const accountsResponse = await this.client.get("/portfolio/accounts");
       const accounts = accountsResponse.data;
-      console.log(`[ACCOUNT-INFO] Found ${accounts?.length || 0} accounts:`, accounts);
+      Logger.log(`[ACCOUNT-INFO] Found ${accounts?.length || 0} accounts:`, accounts);
 
       const result = {
         accounts: accounts,
         summaries: [] as any[]
       };
 
-      console.log("[ACCOUNT-INFO] Processing account summaries...");
+      Logger.log("[ACCOUNT-INFO] Processing account summaries...");
       for (let i = 0; i < accounts.length; i++) {
         const account = accounts[i];
-        console.log(`[ACCOUNT-INFO] Processing account ${i + 1}/${accounts.length}: ${account.id}`);
+        Logger.log(`[ACCOUNT-INFO] Processing account ${i + 1}/${accounts.length}: ${account.id}`);
         
         const summaryResponse = await this.client.get(
           `/portfolio/${account.id}/summary`
         );
         const summary = summaryResponse.data;
-        console.log(`[ACCOUNT-INFO] Account ${account.id} summary:`, summary);
+        Logger.log(`[ACCOUNT-INFO] Account ${account.id} summary:`, summary);
 
         result.summaries.push({
           accountId: account.id,
@@ -177,10 +211,10 @@ export class IBClient {
         });
       }
 
-      console.log(`[ACCOUNT-INFO] Completed processing ${result.summaries.length} accounts`);
+      Logger.log(`[ACCOUNT-INFO] Completed processing ${result.summaries.length} accounts`);
       return result;
     } catch (error) {
-      console.error("[ACCOUNT-INFO] Failed to get account info:", error);
+      Logger.error("[ACCOUNT-INFO] Failed to get account info:", error);
       
       // Check if this is likely an authentication error
       if (this.isAuthenticationError(error)) {
@@ -203,7 +237,7 @@ export class IBClient {
       const response = await this.client.get(url);
       return response.data;
     } catch (error) {
-      console.error("Failed to get positions:", error);
+        Logger.error("Failed to get positions:", error);
       
       // Check if this is likely an authentication error
       if (this.isAuthenticationError(error)) {
@@ -241,7 +275,7 @@ export class IBClient {
         marketData: response.data
       };
     } catch (error) {
-      console.error("Failed to get market data:", error);
+      Logger.error("Failed to get market data:", error);
       
       // Check if this is likely an authentication error
       if (this.isAuthenticationError(error)) {
@@ -322,7 +356,7 @@ export class IBClient {
 
       return response.data;
     } catch (error) {
-      console.error("Failed to place order:", error);
+      Logger.error("Failed to place order:", error);
       
       // Check if this is likely an authentication error
       if (this.isAuthenticationError(error)) {
@@ -340,7 +374,7 @@ export class IBClient {
       const response = await this.client.get(`/iserver/account/orders/${orderId}`);
       return response.data;
     } catch (error) {
-      console.error("Failed to get order status:", error);
+      Logger.error("Failed to get order status:", error);
       
       // Check if this is likely an authentication error
       if (this.isAuthenticationError(error)) {
@@ -363,7 +397,7 @@ export class IBClient {
       const response = await this.client.get(url);
       return response.data;
     } catch (error) {
-      console.error("Failed to get orders:", error);
+      Logger.error("Failed to get orders:", error);
       
       // Check if this is likely an authentication error
       if (this.isAuthenticationError(error)) {

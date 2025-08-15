@@ -8,8 +8,12 @@ export const config = {
   IB_GATEWAY_PORT: parseInt(process.env.IB_GATEWAY_PORT || "5000"),
   IB_ACCOUNT: process.env.IB_ACCOUNT || "",
   IB_PASSWORD: process.env.IB_PASSWORD || "",
-  TRADING_MODE: process.env.TRADING_MODE || "paper",
-  MCP_SERVER_PORT: parseInt(process.env.MCP_SERVER_PORT || "3000"),
-} as const;
+  
+  // Headless authentication configuration
+  IB_USERNAME: process.env.IB_USERNAME || "",
+  IB_PASSWORD_AUTH: process.env.IB_PASSWORD_AUTH || process.env.IB_PASSWORD || "",
+  IB_AUTH_TIMEOUT: parseInt(process.env.IB_AUTH_TIMEOUT || "60000"),
+  IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === "true",
+};
 
 
