@@ -4,22 +4,23 @@ set -e
 
 echo "🔧 Building custom Java runtime for current platform..."
 
-# Essential modules for IB Gateway (based on Vert.x and networking requirements)
-MODULES="java.base,java.logging,java.net.http,java.desktop,java.management,java.naming,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs"
+# Essential modules for IB Gateway (based on Vert.x, Netty and networking requirements)
+# Including jdk.unsupported for sun.misc.Unsafe and other internal APIs
+MODULES="java.base,java.logging,java.net.http,java.desktop,java.management,java.naming,java.security.jgss,java.security.sasl,java.sql,java.xml,java.datatransfer,java.prefs,java.transaction.xa,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs,jdk.unsupported"
 
 # Detect current platform
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
-if [[ "$ARCH" == "arm64" ]]; then
-    ARCH="aarch64"
+if [[ "$ARCH" == "arm64" ]] || [[ "$ARCH" == "aarch64" ]]; then
+    PLATFORM_ARCH="arm64"
 elif [[ "$ARCH" == "x86_64" ]]; then
-    ARCH="x64"
+    PLATFORM_ARCH="x64"
 fi
 
 if [[ "$OS" == "darwin" ]]; then
-    PLATFORM="darwin-$ARCH"
-    if [[ "$ARCH" == "aarch64" ]]; then
+    PLATFORM="darwin-$PLATFORM_ARCH"
+    if [[ "$PLATFORM_ARCH" == "arm64" ]]; then
         JDK_URL="https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.22%2B7/OpenJDK11U-jdk_aarch64_mac_hotspot_11.0.22_7.tar.gz"
         JLINK_PATH="jdk-11.0.22+7/Contents/Home/bin/jlink"
     else

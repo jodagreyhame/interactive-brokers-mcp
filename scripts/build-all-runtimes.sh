@@ -4,8 +4,9 @@ set -e
 
 echo "🔧 Building custom Java runtimes for all platforms..."
 
-# Essential modules for IB Gateway
-MODULES="java.base,java.logging,java.net.http,java.desktop,java.management,java.naming,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs"
+# Essential modules for IB Gateway (based on Vert.x, Netty and networking requirements)
+# Including jdk.unsupported for sun.misc.Unsafe and other internal APIs
+MODULES="java.base,java.logging,java.net.http,java.desktop,java.management,java.naming,java.security.jgss,java.security.sasl,java.sql,java.xml,java.datatransfer,java.prefs,java.transaction.xa,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs,jdk.unsupported"
 
 # Function to build runtime for a specific platform
 build_platform_runtime() {
@@ -15,6 +16,14 @@ build_platform_runtime() {
     local extract_cmd="$4"
     
     echo ""
+    
+    # Check if runtime already exists
+    local runtime_output="./runtime/$platform"
+    if [[ -d "$runtime_output" ]]; then
+        echo "✅ Runtime for $platform already exists, skipping..."
+        return 0
+    fi
+    
     echo "🏗️  Building runtime for $platform..."
     
     # Create platform-specific temp dir

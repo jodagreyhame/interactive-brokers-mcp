@@ -2,8 +2,9 @@
 
 Write-Host "🔧 Building custom Java runtime for Windows x64..." -ForegroundColor Cyan
 
-# Essential modules for IB Gateway
-$MODULES = "java.base,java.logging,java.net.http,java.desktop,java.management,java.naming,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs"
+# Essential modules for IB Gateway (based on Vert.x, Netty and networking requirements)
+# Including jdk.unsupported for sun.misc.Unsafe and other internal APIs
+$MODULES = "java.base,java.logging,java.net.http,java.desktop,java.management,java.naming,java.security.jgss,java.security.sasl,java.sql,java.xml,java.datatransfer,java.prefs,java.transaction.xa,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs,jdk.unsupported"
 
 # Platform-specific settings
 $PLATFORM = "win32-x64"
