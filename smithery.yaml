@@ -6,18 +6,23 @@ startCommand:
     # JSON Schema defining the configuration options for the MCP.
     type: object
     properties:
-      headless:
+      IB_HEADLESS_MODE:
         type: boolean
         description: "Enable headless authentication (default: false)"
         default: false
-      username:
+      IB_USERNAME:
         type: string
         description: "IB username for headless authentication"
-      password:
+      IB_PASSWORD_AUTH:
         type: string
         description: "IB password for headless authentication"
         format: "password"
+      IB_AUTH_TIMEOUT:
+        type: number
+        description: "Authentication timeout in milliseconds (default: 60000)"
+        default: 60000
   exampleConfig:
-    headless: true
-    username: "your_ib_username"
-    password: "your_ib_password"
+    IB_HEADLESS_MODE: true
+    IB_USERNAME: "your_ib_username"
+    IB_PASSWORD_AUTH: "your_ib_password"
+    IB_AUTH_TIMEOUT: 60000
