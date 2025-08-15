@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+// No more runtime builder imports needed
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,9 +20,8 @@ export class IBGatewayManager {
   constructor() {
     // Gateway directory is relative to the project root (one level up from src)
     this.gatewayDir = path.join(__dirname, '../ib-gateway');
-    // Point to pre-bundled JRE based on platform
-    const platform = `${process.platform}-${process.arch}`;
-    this.jreDir = path.join(__dirname, '../jre', platform);
+    // Runtime directory points to pre-built custom runtimes
+    this.jreDir = path.join(__dirname, '../runtime');
     // Determine if we should use stderr for logging (STDIO mode)
     this.useStderr = !(process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http'));
     
@@ -110,46 +110,18 @@ export class IBGatewayManager {
     }
   }
 
-  private getBundledJavaPath(): string {
+  private getJavaPath(): string {
+    const platform = `${process.platform}-${process.arch}`;
     const isWindows = process.platform === 'win32';
     const javaExecutable = isWindows ? 'java.exe' : 'java';
-    const fs = require('fs');
     
-    // First, try direct paths
-    const directPaths = [
-      path.join(this.jreDir, 'bin', javaExecutable),
-      path.join(this.jreDir, 'Contents', 'Home', 'bin', javaExecutable) // macOS alternative
-    ];
+    const runtimePath = path.join(this.jreDir, platform, 'bin', javaExecutable);
     
-    for (const javaPath of directPaths) {
-      if (fs.existsSync(javaPath)) {
-        return javaPath;
-      }
+    if (!require('fs').existsSync(runtimePath)) {
+      throw new Error(`Custom runtime not found for platform: ${platform}. Expected at: ${runtimePath}`);
     }
     
-    // Search for JDK directories dynamically
-    try {
-      const entries = fs.readdirSync(this.jreDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory() && entry.name.startsWith('jdk-')) {
-          // Check for macOS structure (jdk-*/Contents/Home/bin/java)
-          const macOSPath = path.join(this.jreDir, entry.name, 'Contents', 'Home', 'bin', javaExecutable);
-          if (fs.existsSync(macOSPath)) {
-            return macOSPath;
-          }
-          
-          // Check for Linux/Windows structure (jdk-*/bin/java)
-          const unixPath = path.join(this.jreDir, entry.name, 'bin', javaExecutable);
-          if (fs.existsSync(unixPath)) {
-            return unixPath;
-          }
-        }
-      }
-    } catch (e) {
-      // Fall through to error
-    }
-    
-    throw new Error(`Bundled Java runtime not found for platform: ${process.platform}-${process.arch}`);
+    return runtimePath;
   }
 
   async ensureGatewayExists(): Promise<void> {
@@ -175,7 +147,7 @@ export class IBGatewayManager {
     try {
       await this.ensureGatewayExists();
       
-      const bundledJavaPath = this.getBundledJavaPath();
+      const bundledJavaPath = this.getJavaPath();
       const bundledJavaHome = path.dirname(path.dirname(bundledJavaPath));
       
       const configFile = 'root/conf.yaml';
