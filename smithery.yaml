@@ -5,7 +5,12 @@ startCommand:
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
-    (config) => ({ command: 'node', args: ['dist/index.js'] })
+    (config) => ({ command: 'node', args: ['dist/index.js'], env: {
+      IB_HEADLESS_MODE: config.IB_HEADLESS_MODE,
+      IB_USERNAME: config.IB_USERNAME,
+      IB_PASSWORD_AUTH: config.IB_PASSWORD_AUTH,
+      IB_AUTH_TIMEOUT: config.IB_AUTH_TIMEOUT,
+    } })
   configSchema:
     # JSON Schema defining the configuration options for the MCP.
     type: object
