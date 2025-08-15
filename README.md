@@ -48,6 +48,36 @@ Add this MCP server to your Cursor/Claude configuration:
 
 When you first use the server, a web browser window will automatically open for the Interactive Brokers OAuth authentication flow. Log in with your IB credentials to authorize the connection.
 
+## Headless Mode Configuration
+
+For automated environments or when you prefer not to use a browser for authentication, you can enable headless mode by configuring it in your MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "interactive-brokers": {
+      "command": "npx",
+      "args": ["-y", "interactive-brokers-mcp"],
+      "env": {
+        "IB_HEADLESS_MODE": "true",
+        "IB_USERNAME": "your_ib_username",
+        "IB_PASSWORD_AUTH": "your_ib_password"
+      }
+    }
+  }
+}
+```
+
+In headless mode, the server will automatically authenticate using your credentials without opening a browser window. This is useful for:
+- Automated trading systems
+- Server environments without a display
+- CI/CD pipelines
+- Situations where browser interaction is not desired
+
+**Important**: Even in headless mode, Interactive Brokers may still require two-factor authentication (2FA). When 2FA is triggered, the headless authentication will wait for you to complete the 2FA process through your configured method (mobile app, SMS, etc.) before proceeding.
+
+**Security Note**: Store credentials securely and never commit them to version control. Consider using environment variable files or secure credential management systems.
+
 ## Available MCP Tools
 
 | Tool | Description |
