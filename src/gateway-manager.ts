@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { Logger } from './logger.js';
+import * as net from 'net';
 // No more runtime builder imports needed
 
 const require = createRequire(import.meta.url);
@@ -17,6 +18,7 @@ export class IBGatewayManager {
   private isReady = false;
   private useStderr: boolean;
   private cleanupHandlersRegistered = false;
+  private currentPort: number = 5000;
 
   constructor() {
     // Gateway directory is relative to the project root (one level up from src)
@@ -33,6 +35,53 @@ export class IBGatewayManager {
   private log(message: string) {
     // Use Logger for MCP-safe logging
     Logger.info(message);
+  }
+
+  private async isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      
+      server.listen(port, '127.0.0.1', () => {
+        server.close(() => {
+          resolve(true);
+        });
+      });
+      
+      server.on('error', () => {
+        resolve(false);
+      });
+    });
+  }
+
+  private async findAvailablePort(startPort: number = 5000, maxAttempts: number = 10): Promise<number> {
+    for (let i = 0; i < maxAttempts; i++) {
+      const port = startPort + i;
+      const available = await this.isPortAvailable(port);
+      if (available) {
+        this.log(`✅ Found available port: ${port}`);
+        return port;
+      }
+      this.log(`❌ Port ${port} is already in use`);
+    }
+    throw new Error(`No available ports found in range ${startPort}-${startPort + maxAttempts - 1}`);
+  }
+
+  private async createTempConfigWithPort(port: number): Promise<void> {
+    const originalConfigPath = path.join(this.gatewayDir, 'clientportal.gw/root/conf.yaml');
+    const tempConfigPath = path.join(this.gatewayDir, `clientportal.gw/root/conf-${port}.yaml`);
+    
+    try {
+      // Read the original config
+      const content = await fs.readFile(originalConfigPath, 'utf8');
+      // Replace the port
+      const updatedContent = content.replace(/listenPort:\s*\d+/, `listenPort: ${port}`);
+      // Write to temp config file
+      await fs.writeFile(tempConfigPath, updatedContent, 'utf8');
+      this.log(`📝 Created temporary config file with port ${port}`);
+    } catch (error) {
+      Logger.error(`❌ Failed to create temporary config file:`, error);
+      throw error;
+    }
   }
 
   private registerCleanupHandlers(): void {
@@ -87,10 +136,31 @@ export class IBGatewayManager {
         this.log('🧹 Cleaning up gateway process...');
         await this.stopGateway();
       }
+      
+      // Clean up temporary config files
+      await this.cleanupTempConfigFiles();
     } catch (error) {
       Logger.error('❌ Error during cleanup:', error);
       // Force kill as fallback
       this.forceKillGateway();
+    }
+  }
+
+  private async cleanupTempConfigFiles(): Promise<void> {
+    try {
+      const configDir = path.join(this.gatewayDir, 'clientportal.gw/root');
+      const files = await fs.readdir(configDir);
+      
+      for (const file of files) {
+        if (file.match(/^conf-\d+\.yaml$/)) {
+          const filePath = path.join(configDir, file);
+          await fs.unlink(filePath);
+          this.log(`🗑️ Cleaned up temporary config file: ${file}`);
+        }
+      }
+    } catch (error) {
+      // Don't throw errors for cleanup failures
+      this.log(`⚠️ Warning: Could not clean up temporary config files: ${error}`);
     }
   }
 
@@ -145,10 +215,32 @@ export class IBGatewayManager {
     try {
       await this.ensureGatewayExists();
       
+      // Check if default port 5000 is available, if not try to find an alternative
+      this.log('🔍 Checking port availability...');
+      const defaultPort = 5000;
+      
+      if (await this.isPortAvailable(defaultPort)) {
+        this.currentPort = defaultPort;
+        this.log(`✅ Using default port ${defaultPort}`);
+      } else {
+        this.log(`❌ Default port ${defaultPort} is occupied, trying to find alternative...`);
+        try {
+          this.currentPort = await this.findAvailablePort(5001, 9); // Try 5001-5009
+          this.log(`✅ Found alternative port ${this.currentPort}`);
+          
+          // Since IB Gateway doesn't support port override via command line,
+          // we'll need to create a temporary config file with the new port
+          await this.createTempConfigWithPort(this.currentPort);
+        } catch (error) {
+          this.log(`❌ No alternative ports available, will try with default port anyway`);
+          this.currentPort = defaultPort;
+        }
+      }
+      
       const bundledJavaPath = this.getJavaPath();
       const bundledJavaHome = path.dirname(path.dirname(bundledJavaPath));
       
-      const configFile = 'root/conf.yaml';
+      const configFile = this.currentPort === defaultPort ? 'root/conf.yaml' : `root/conf-${this.currentPort}.yaml`;
       const jarPath = path.join(this.gatewayDir, 'clientportal.gw/dist/ibgroup.web.core.iblink.router.clientportal.gw.jar');
       const runtimePath = path.join(this.gatewayDir, 'clientportal.gw/build/lib/runtime/*');
       const configDir = path.join(this.gatewayDir, 'clientportal.gw/root');
@@ -158,6 +250,7 @@ export class IBGatewayManager {
       this.log('🚀 Starting IB Gateway with bundled JRE...');
       this.log('   Java: ' + bundledJavaPath);
       this.log('   Config: ' + configFile);
+      this.log('   Port: ' + this.currentPort);
       
       this.gatewayProcess = spawn(bundledJavaPath, [
         '-server',
@@ -237,7 +330,7 @@ export class IBGatewayManager {
         // Try to connect to the gateway port
         const response = await this.checkGatewayHealth();
         if (response) {
-          this.log('✅ IB Gateway is responding on port 5000');
+          this.log(`✅ IB Gateway is responding on port ${this.currentPort}`);
           return;
         }
       } catch (error) {
@@ -262,7 +355,7 @@ export class IBGatewayManager {
     return new Promise((resolve, reject) => {
       const options = {
         hostname: 'localhost',
-        port: 5000,
+        port: this.currentPort,
         path: '/',
         method: 'GET',
         rejectUnauthorized: false, // Accept self-signed certificates
@@ -344,7 +437,11 @@ export class IBGatewayManager {
   }
 
   getGatewayUrl(): string {
-    return 'https://localhost:5000';
+    return `https://localhost:${this.currentPort}`;
+  }
+
+  getCurrentPort(): number {
+    return this.currentPort;
   }
 }
 

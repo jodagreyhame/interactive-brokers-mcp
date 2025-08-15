@@ -16,20 +16,23 @@ export const configSchema = z.object({
 let gatewayManager: IBGatewayManager | null = null;
 
 // Initialize and start IB Gateway
-async function initializeGateway() {
+async function initializeGateway(ibClient?: IBClient) {
   if (!gatewayManager) {
     gatewayManager = new IBGatewayManager();
     
-    
-      try {
-        Logger.info('🚀 Starting Interactive Brokers Gateway...');
-        await gatewayManager.startGateway();
-        Logger.info('✅ IB Gateway started successfully');
-      } catch (error) {
-        Logger.error('❌ Failed to start IB Gateway:', error);
-        throw error;
+    try {
+      Logger.info('🚀 Starting Interactive Brokers Gateway...');
+      await gatewayManager.startGateway();
+      Logger.info('✅ IB Gateway started successfully');
+      
+      // Update client port if provided
+      if (ibClient) {
+        ibClient.updatePort(gatewayManager.getCurrentPort());
       }
-    
+    } catch (error) {
+      Logger.error('❌ Failed to start IB Gateway:', error);
+      throw error;
+    }
   }
   return gatewayManager;
 }
@@ -64,14 +67,14 @@ const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
                      process.argv[1]?.includes('/.bin/ib-mcp');
 
 function IBMCP({}: { config: z.infer<typeof configSchema> }) {
-  // Create IB Client
+  // Create IB Client with default port initially - this will be updated once gateway starts
   const ibClient = new IBClient({
     host: config.IB_GATEWAY_HOST,
     port: config.IB_GATEWAY_PORT,
   });
 
-  // Initialize gateway on first server creation
-  initializeGateway().catch(error => {
+  // Initialize gateway on first server creation and update client port
+  initializeGateway(ibClient).catch(error => {
     Logger.error('Failed to initialize gateway:', error);
   });
 
@@ -82,7 +85,7 @@ function IBMCP({}: { config: z.infer<typeof configSchema> }) {
   });
 
   // Register all tools
-  registerTools(server, ibClient);
+  registerTools(server, ibClient, gatewayManager || undefined);
 
   return server.server;
 }

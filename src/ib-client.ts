@@ -23,15 +23,21 @@ export interface OrderRequest {
 
 
 export class IBClient {
-  private client: AxiosInstance;
-  private baseUrl: string;
+  private client!: AxiosInstance;
+  private baseUrl!: string;
+  private config: IBClientConfig;
   private isAuthenticated = false;
   private authAttempts = 0;
   private maxAuthAttempts = 3;
 
   constructor(config: IBClientConfig) {
+    this.config = config;
+    this.initializeClient();
+  }
+
+  private initializeClient(): void {
     // Use HTTPS as IB Gateway expects it
-    this.baseUrl = `https://${config.host}:${config.port}/v1/api`;
+    this.baseUrl = `https://${this.config.host}:${this.config.port}/v1/api`;
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 30000,
@@ -88,6 +94,16 @@ export class IBClient {
         return Promise.reject(error);
       }
     );
+  }
+
+  updatePort(newPort: number): void {
+    if (this.config.port !== newPort) {
+      console.log(`[CLIENT] Updating port from ${this.config.port} to ${newPort}`);
+      this.config.port = newPort;
+      this.isAuthenticated = false; // Force re-authentication with new port
+      this.authAttempts = 0; // Reset auth attempts
+      this.initializeClient(); // Re-initialize client with new port
+    }
   }
 
   private async authenticate(): Promise<void> {

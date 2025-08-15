@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { IBClient } from "./ib-client.js";
+import { IBGatewayManager } from "./gateway-manager.js";
 import { config } from "./config.js";
 import open from "open";
 
-export function registerTools(server: McpServer, ibClient: IBClient) {
+export function registerTools(server: McpServer, ibClient: IBClient, gatewayManager?: IBGatewayManager) {
   // Helper function to check for authentication errors
   function isAuthenticationError(error: any): boolean {
     if (!error) return false;
@@ -26,7 +27,8 @@ export function registerTools(server: McpServer, ibClient: IBClient) {
   }
 
   function getAuthenticationErrorMessage(): string {
-    const authUrl = `https://${config.IB_GATEWAY_HOST}:${config.IB_GATEWAY_PORT}`;
+    const port = gatewayManager ? gatewayManager.getCurrentPort() : config.IB_GATEWAY_PORT;
+    const authUrl = `https://${config.IB_GATEWAY_HOST}:${port}`;
     return `Authentication required. Please use the 'authenticate' tool to open the Interactive Brokers web interface at ${authUrl} and complete the authentication process.`;
   }
 
@@ -38,7 +40,8 @@ export function registerTools(server: McpServer, ibClient: IBClient) {
       random_string: z.string().optional().describe("Dummy parameter for no-parameter tools"),
     },
     async ({ random_string }) => {
-      const authUrl = `https://${config.IB_GATEWAY_HOST}:${config.IB_GATEWAY_PORT}`;
+      const port = gatewayManager ? gatewayManager.getCurrentPort() : config.IB_GATEWAY_PORT;
+      const authUrl = `https://${config.IB_GATEWAY_HOST}:${port}`;
       
       try {
         await open(authUrl);
