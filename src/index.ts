@@ -87,6 +87,10 @@ function IBMCP({}: { config: z.infer<typeof configSchema> }) {
 }
 
 if (isMainModule) {
+  // Suppress known problematic outputs that might interfere with JSON-RPC
+  process.env.SUPPRESS_LOAD_MESSAGE = '1';
+  process.env.NO_UPDATE_NOTIFIER = '1';
+  
   const stdioTransport = new StdioServerTransport();
   const server = IBMCP({config: {}})
   server.connect(stdioTransport);
