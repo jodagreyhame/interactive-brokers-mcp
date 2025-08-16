@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import https from "https";
-import { Logger } from "./logger";
+import { Logger } from "./logger.js";
 
 interface ExtendedAxiosRequestConfig extends AxiosRequestConfig {
   metadata?: { requestId: string };
