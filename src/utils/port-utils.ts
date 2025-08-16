@@ -14,11 +14,13 @@ export class PortUtils {
           command = `netstat -an | findstr :${port}`;
           break;
         case 'darwin':
-        case 'linux':
           command = `lsof -i :${port}`;
           break;
+        case 'linux':
+          command = `ss -tuln | grep ":${port} " || netstat -tuln | grep ":${port} "`;
+          break;
         default:
-          command = `netstat -an | grep :${port}`;
+          command = `netstat -an | grep "\\.${port} "`;
           break;
       }
       
