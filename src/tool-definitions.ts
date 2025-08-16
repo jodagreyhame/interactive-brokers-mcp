@@ -3,35 +3,98 @@ import { z } from "zod";
 export interface ToolDefinition {
   name: string;
   description: string;
-  inputSchema: { [key: string]: z.ZodType<any> };
+  inputSchema: {
+    type: "object";
+    properties: { [key: string]: any };
+    required?: string[];
+  };
 }
 
-// Tool input schemas (as raw shapes for MCP server)
-export const AuthenticateSchema = {};
+// Tool input schemas (as JSON Schema objects for MCP protocol)
+export const AuthenticateSchema = {
+  type: "object" as const,
+  properties: {},
+  required: [],
+};
 
-export const GetAccountInfoSchema = {};
+export const GetAccountInfoSchema = {
+  type: "object" as const,
+  properties: {},
+  required: [],
+};
 
 export const GetPositionsSchema = {
-  accountId: z.string().optional().describe("Account ID (optional, uses default if not provided)"),
+  type: "object" as const,
+  properties: {
+    accountId: {
+      type: "string",
+      description: "Account ID (optional, uses default if not provided)",
+    },
+  },
+  required: [],
 };
 
 export const GetMarketDataSchema = {
-  symbol: z.string().describe("Trading symbol (e.g., AAPL, TSLA)"),
-  exchange: z.string().optional().describe("Exchange (optional)"),
+  type: "object" as const,
+  properties: {
+    symbol: {
+      type: "string",
+      description: "Trading symbol (e.g., AAPL, TSLA)",
+    },
+    exchange: {
+      type: "string",
+      description: "Exchange (optional)",
+    },
+  },
+  required: ["symbol"],
 };
 
 export const PlaceOrderSchema = {
-  accountId: z.string().describe("Account ID"),
-  symbol: z.string().describe("Trading symbol"),
-  action: z.enum(["BUY", "SELL"]).describe("Order action"),
-  orderType: z.enum(["MKT", "LMT", "STP"]).describe("Order type"),
-  quantity: z.number().describe("Number of shares"),
-  price: z.number().optional().describe("Limit price (required for LMT orders)"),
-  stopPrice: z.number().optional().describe("Stop price (required for STP orders)"),
+  type: "object" as const,
+  properties: {
+    accountId: {
+      type: "string",
+      description: "Account ID",
+    },
+    symbol: {
+      type: "string",
+      description: "Trading symbol",
+    },
+    action: {
+      type: "string",
+      enum: ["BUY", "SELL"],
+      description: "Order action",
+    },
+    orderType: {
+      type: "string",
+      enum: ["MKT", "LMT", "STP"],
+      description: "Order type",
+    },
+    quantity: {
+      type: "number",
+      description: "Number of shares",
+    },
+    price: {
+      type: "number",
+      description: "Limit price (required for LMT orders)",
+    },
+    stopPrice: {
+      type: "number",
+      description: "Stop price (required for STP orders)",
+    },
+  },
+  required: ["accountId", "symbol", "action", "orderType", "quantity"],
 };
 
 export const GetOrderStatusSchema = {
-  orderId: z.string().describe("Order ID"),
+  type: "object" as const,
+  properties: {
+    orderId: {
+      type: "string",
+      description: "Order ID",
+    },
+  },
+  required: ["orderId"],
 };
 
 // Tool definitions
@@ -68,18 +131,25 @@ export const toolDefinitions: ToolDefinition[] = [
   },
 ];
 
-// Export Zod object schemas for type inference
-export const AuthenticateZodSchema = z.object(AuthenticateSchema);
-export const GetAccountInfoZodSchema = z.object(GetAccountInfoSchema);
-export const GetPositionsZodSchema = z.object(GetPositionsSchema);
-export const GetMarketDataZodSchema = z.object(GetMarketDataSchema);
-export const PlaceOrderZodSchema = z.object(PlaceOrderSchema);
-export const GetOrderStatusZodSchema = z.object(GetOrderStatusSchema);
-
-// Export individual schemas for type inference
-export type AuthenticateInput = z.infer<typeof AuthenticateZodSchema>;
-export type GetAccountInfoInput = z.infer<typeof GetAccountInfoZodSchema>;
-export type GetPositionsInput = z.infer<typeof GetPositionsZodSchema>;
-export type GetMarketDataInput = z.infer<typeof GetMarketDataZodSchema>;
-export type PlaceOrderInput = z.infer<typeof PlaceOrderZodSchema>;
-export type GetOrderStatusInput = z.infer<typeof GetOrderStatusZodSchema>;
+// Export TypeScript types for type inference
+export type AuthenticateInput = {};
+export type GetAccountInfoInput = {};
+export type GetPositionsInput = {
+  accountId?: string;
+};
+export type GetMarketDataInput = {
+  symbol: string;
+  exchange?: string;
+};
+export type PlaceOrderInput = {
+  accountId: string;
+  symbol: string;
+  action: "BUY" | "SELL";
+  orderType: "MKT" | "LMT" | "STP";
+  quantity: number;
+  price?: number;
+  stopPrice?: number;
+};
+export type GetOrderStatusInput = {
+  orderId: string;
+};
