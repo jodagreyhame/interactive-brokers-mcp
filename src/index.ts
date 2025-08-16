@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { IBClient } from "./ib-client.js";
@@ -150,9 +150,10 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
   });
 
   // Create MCP server
-  const server = new McpServer({
+  const server = new Server({
     name: "interactive-brokers-mcp",
-    version: "1.0.0",
+    version: "1.0.0"
+  }, {
     capabilities: {
       tools: {},
       logging: {},
@@ -162,7 +163,7 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
   // Register all tools with merged config
   registerTools(server, ibClient, gatewayManager || undefined, mergedConfig);
 
-  return server.server;
+  return server;
 }
 
 if (isMainModule) {
