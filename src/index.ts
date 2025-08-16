@@ -154,6 +154,7 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
     name: "interactive-brokers-mcp",
     version: "1.0.0",
     capabilities: {
+      tools: {},
       logging: {},
     }
   });
