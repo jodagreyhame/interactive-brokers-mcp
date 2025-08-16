@@ -7,6 +7,67 @@ import { config } from "./config.js";
 import { registerTools } from "./tools.js";
 import { Logger } from "./logger.js";
 
+// Parse command line arguments
+function parseArgs(): z.infer<typeof configSchema> {
+  const args: any = {};
+  const argv = process.argv.slice(2);
+  
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2);
+      const nextArg = argv[i + 1];
+      
+      switch (key) {
+        case 'ib-username':
+          args.IB_USERNAME = nextArg;
+          i++;
+          break;
+        case 'ib-password':
+        case 'ib-password-auth':
+          args.IB_PASSWORD_AUTH = nextArg;
+          i++;
+          break;
+        case 'ib-auth-timeout':
+          args.IB_AUTH_TIMEOUT = parseInt(nextArg);
+          i++;
+          break;
+        case 'ib-headless-mode':
+          // Support both --ib-headless-mode (boolean flag) and --ib-headless-mode=true/false
+          if (nextArg && !nextArg.startsWith('--')) {
+            args.IB_HEADLESS_MODE = nextArg.toLowerCase() === 'true';
+            i++;
+          } else {
+            args.IB_HEADLESS_MODE = true;
+          }
+          break;
+      }
+    } else if (arg.includes('=')) {
+      const [key, value] = arg.split('=', 2);
+      const cleanKey = key.startsWith('--') ? key.slice(2) : key;
+      
+      switch (cleanKey) {
+        case 'ib-username':
+          args.IB_USERNAME = value;
+          break;
+        case 'ib-password':
+        case 'ib-password-auth':
+          args.IB_PASSWORD_AUTH = value;
+          break;
+        case 'ib-auth-timeout':
+          args.IB_AUTH_TIMEOUT = parseInt(value);
+          break;
+        case 'ib-headless-mode':
+          args.IB_HEADLESS_MODE = value.toLowerCase() === 'true';
+          break;
+      }
+    }
+  }
+  
+  return args;
+}
+
 // Optional: Define configuration schema for session configuration
 export const configSchema = z.object({
   // Authentication configuration
@@ -111,8 +172,31 @@ if (isMainModule) {
   // Log startup information
   Logger.logStartup();
   
+  // Parse command line arguments and merge with environment variables
+  // Priority: args > env > defaults
+  const argsConfig = parseArgs();
+  const envConfig = {
+    IB_USERNAME: process.env.IB_USERNAME,
+    IB_PASSWORD_AUTH: process.env.IB_PASSWORD_AUTH || process.env.IB_PASSWORD,
+    IB_AUTH_TIMEOUT: process.env.IB_AUTH_TIMEOUT ? parseInt(process.env.IB_AUTH_TIMEOUT) : undefined,
+    IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === 'true',
+  };
+  
+  // Merge configs with priority: args > env > defaults
+  const finalConfig = {
+    ...envConfig,
+    ...argsConfig,
+  };
+  
+  // Remove undefined values
+  Object.keys(finalConfig).forEach(key => {
+    if (finalConfig[key as keyof typeof finalConfig] === undefined) {
+      delete finalConfig[key as keyof typeof finalConfig];
+    }
+  });
+  
   const stdioTransport = new StdioServerTransport();
-  const server = IBMCP({config: {}})
+  const server = IBMCP({config: finalConfig})
   server.connect(stdioTransport);
 }
 
