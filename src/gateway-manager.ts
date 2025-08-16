@@ -81,19 +81,8 @@ export class IBGatewayManager {
   private async isGatewayHealthy(port: number): Promise<boolean> {
     return new Promise((resolve) => {
       const startTime = Date.now();
-      this.log(`   ⏱️ Testing Gateway health on port ${port} (max 1s timeout)...`);
+      this.log(`   ⏱️ Testing Gateway health on port ${port} (max 500ms timeout)...`);
       
-      // Try to make a simple HTTP request to the Gateway health endpoint
-      const https = require('https');
-      const options = {
-        hostname: 'localhost',
-        port: port,
-        path: '/v1/api/portal/iserver/auth/status',
-        method: 'GET',
-        timeout: 1000, // Reduced from 2000ms to 1000ms
-        rejectUnauthorized: false, // IB Gateway uses self-signed certificates
-      };
-
       let completed = false;
       const complete = (result: boolean, reason: string) => {
         if (completed) return;
@@ -103,30 +92,53 @@ export class IBGatewayManager {
         resolve(result);
       };
 
-      // Additional safety timeout
+      // Very aggressive timeout to prevent hanging
       const safetyTimeout = setTimeout(() => {
-        complete(false, 'safety timeout');
-      }, 1000);
+        complete(false, 'safety timeout (500ms)');
+      }, 500);
 
-      const req = https.request(options, (res: any) => {
+      try {
+        // Try to make a simple HTTP request to the Gateway health endpoint
+        const https = require('https');
+        const options = {
+          hostname: 'localhost',
+          port: port,
+          path: '/v1/api/portal/iserver/auth/status',
+          method: 'GET',
+          timeout: 300, // Very short timeout
+          rejectUnauthorized: false, // IB Gateway uses self-signed certificates
+        };
+
+        const req = https.request(options, (res: any) => {
+          clearTimeout(safetyTimeout);
+          // Any response (even error responses) means the Gateway is running
+          complete(true, 'responded');
+        });
+
+        req.on('error', (error: any) => {
+          clearTimeout(safetyTimeout);
+          // Connection error means Gateway is not running or not healthy
+          complete(false, `connection error: ${error.code || error.message}`);
+        });
+
+        req.on('timeout', () => {
+          clearTimeout(safetyTimeout);
+          req.destroy();
+          complete(false, 'request timeout');
+        });
+
+        // Set socket timeout as well
+        req.setTimeout(300, () => {
+          clearTimeout(safetyTimeout);
+          req.destroy();
+          complete(false, 'socket timeout');
+        });
+
+        req.end();
+      } catch (error) {
         clearTimeout(safetyTimeout);
-        // Any response (even error responses) means the Gateway is running
-        complete(true, 'responded');
-      });
-
-      req.on('error', (error: any) => {
-        clearTimeout(safetyTimeout);
-        // Connection error means Gateway is not running or not healthy
-        complete(false, `connection error: ${error.code || error.message}`);
-      });
-
-      req.on('timeout', () => {
-        clearTimeout(safetyTimeout);
-        req.destroy();
-        complete(false, 'request timeout');
-      });
-
-      req.end();
+        complete(false, `request creation error: ${error}`);
+      }
     });
   }
 
