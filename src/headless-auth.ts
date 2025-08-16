@@ -28,7 +28,7 @@ export class HeadlessAuthenticator {
       // Launch browser in headless mode (puppeteer includes Chromium)
       this.browser = await puppeteer.launch({ 
         headless: true,
-        // Accept self-signed certificates
+        // Accept self-signed certificates and basic sandboxing for containers
         args: [
           '--ignore-certificate-errors', 
           '--ignore-ssl-errors', 
@@ -144,12 +144,20 @@ export class HeadlessAuthenticator {
 
     } catch (error) {
       Logger.error('❌ Headless authentication failed:', error);
+      Logger.error('Environment info:', {
+        platform: process.platform,
+        arch: process.arch,
+        nodeVersion: process.version
+      });
       await this.cleanup();
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorDetails = error instanceof Error ? error.stack : 'No stack trace available';
       
       return {
         success: false,
         message: 'Headless authentication failed',
-        error: error instanceof Error ? error.message : String(error)
+        error: `${errorMessage}\n\nStack trace:\n${errorDetails}\n\nEnvironment: ${process.platform}-${process.arch}, Node: ${process.version}`
       };
     }
   }
@@ -226,10 +234,13 @@ export class HeadlessAuthenticator {
       Logger.error('❌ Error waiting for 2FA:', error);
       await this.cleanup();
       
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorDetails = error instanceof Error ? error.stack : 'No stack trace available';
+      
       return {
         success: false,
         message: 'Error while waiting for two-factor authentication',
-        error: error instanceof Error ? error.message : String(error)
+        error: `${errorMessage}\n\nStack trace:\n${errorDetails}`
       };
     }
   }
@@ -253,4 +264,5 @@ export class HeadlessAuthenticator {
   async close(): Promise<void> {
     await this.cleanup();
   }
+
 }

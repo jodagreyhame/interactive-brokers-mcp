@@ -29,7 +29,7 @@ export class Logger {
       Logger.ensureLogDir();
       const timestamp = new Date().toISOString();
       const argsStr = args.length > 0 ? ' ' + args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+        Logger.serializeArgument(arg)
       ).join(' ') : '';
       const logLine = `${timestamp} [${level}] ${message}${argsStr}\n`;
       appendFileSync(Logger.logFile, logLine, 'utf8');
@@ -43,7 +43,7 @@ export class Logger {
     
     const timestamp = new Date().toISOString();
     const argsStr = args.length > 0 ? ' ' + args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+      Logger.serializeArgument(arg)
     ).join(' ') : '';
     const logLine = `${timestamp} [${level}] ${message}${argsStr}`;
     
@@ -100,5 +100,27 @@ export class Logger {
   // Check if console logging is enabled
   static isConsoleLoggingEnabled(): boolean {
     return Logger.enableConsoleLogging;
+  }
+
+  // Helper method to properly serialize arguments including error objects
+  private static serializeArgument(arg: any): string {
+    if (arg instanceof Error) {
+      // For Error objects, extract all important properties including non-enumerable ones
+      return JSON.stringify({
+        ...arg,
+        name: arg.name,
+        message: arg.message,
+        stack: arg.stack,        
+      });
+    } else if (typeof arg === 'object' && arg !== null) {
+      try {
+        return JSON.stringify(arg);
+      } catch (circularError) {
+        // Handle circular references
+        return '[Object with circular reference]';
+      }
+    } else {
+      return String(arg);
+    }
   }
 }
