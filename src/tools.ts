@@ -219,7 +219,9 @@ export function registerTools(server: McpServer, ibClient: IBClient, gatewayMana
   server.tool(
     "get_account_info",
     "Get account information and balances",
-    {},
+    {
+      random_string: z.string().optional().describe("Dummy parameter for no-parameter tools"),
+    },
     async ({}) => {
       try {
         // Ensure authentication in headless mode
