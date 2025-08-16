@@ -61,18 +61,6 @@ export class IBGatewayManager {
     }
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
   private registerCleanupHandlers(): void {
     if (this.cleanupHandlersRegistered) {
       return;
@@ -297,6 +285,8 @@ export class IBGatewayManager {
       
       const bundledJavaPath = this.getJavaPath();
       const bundledJavaHome = path.dirname(path.dirname(bundledJavaPath));
+      const bundledJavaLibPath = path.join(bundledJavaHome, 'lib');
+      const bundledJavaServerLibPath = path.join(bundledJavaLibPath, 'server');
       
       const configFile = this.currentPort === defaultPort ? 'root/conf.yaml' : `root/conf-${this.currentPort}.yaml`;
       const jarPath = path.join(this.gatewayDir, 'clientportal.gw/dist/ibgroup.web.core.iblink.router.clientportal.gw.jar');
@@ -307,6 +297,8 @@ export class IBGatewayManager {
 
       this.log('🚀 Starting IB Gateway with bundled JRE...');
       this.log('   Java: ' + bundledJavaPath);
+      this.log('   Java Home: ' + bundledJavaHome);
+      this.log('   Lib Path: ' + `${bundledJavaServerLibPath}:${bundledJavaLibPath}`);
       this.log('   Config: ' + configFile);
       this.log('   Port: ' + this.currentPort);
       
@@ -327,7 +319,8 @@ export class IBGatewayManager {
         cwd: path.join(this.gatewayDir, 'clientportal.gw'),
         env: {
           ...process.env,
-          JAVA_HOME: bundledJavaHome
+          JAVA_HOME: bundledJavaHome,
+          LD_LIBRARY_PATH: `${bundledJavaServerLibPath}:${bundledJavaLibPath}:${process.env.LD_LIBRARY_PATH || ''}`
         },
         stdio: ['ignore', 'pipe', 'pipe']
       });
