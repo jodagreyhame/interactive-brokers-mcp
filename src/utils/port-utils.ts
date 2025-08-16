@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import os from 'os';
-import { Logger } from '../logger';
+import { Logger } from '../logger.js';
 
 export class PortUtils {
   static async isPortAvailable(port: number): Promise<boolean> {
