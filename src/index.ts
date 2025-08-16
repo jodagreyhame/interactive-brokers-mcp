@@ -121,9 +121,21 @@ async function cleanupGateway(signal?: string) {
 }
 
 // Set up shutdown handlers with better Railway compatibility
-process.on('SIGINT', () => cleanupGateway('SIGINT'));
-process.on('SIGTERM', () => cleanupGateway('SIGTERM')); // Railway uses SIGTERM for graceful shutdown
-process.on('SIGUSR2', () => cleanupGateway('SIGUSR2')); // Sometimes used by process managers
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal: string) => {
+  if (isShuttingDown) {
+    Logger.warn(`⚠️ Already shutting down, ignoring ${signal}`);
+    return;
+  }
+  isShuttingDown = true;
+  await cleanupGateway(signal);
+  process.exit(0);
+};
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // Railway uses SIGTERM for graceful shutdown
+process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2')); // Sometimes used by process managers
 process.on('exit', (code) => {
   Logger.info(`🛑 Process exiting with code ${code}, ensuring cleanup...`);
 });
@@ -190,6 +202,33 @@ if (isMainModule) {
   // Suppress known problematic outputs that might interfere with JSON-RPC
   process.env.SUPPRESS_LOAD_MESSAGE = '1';
   process.env.NO_UPDATE_NOTIFIER = '1';
+  
+  // Check if we're running on Railway and set up health endpoint
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    Logger.info('🚂 Detected Railway environment, setting up health endpoint...');
+    const port = process.env.PORT || '3000';
+    
+    // Simple HTTP server for Railway health checks
+    const http = require('http');
+    const server = http.createServer((req: any, res: any) => {
+      if (req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          status: 'healthy', 
+          service: 'ib-mcp-server',
+          timestamp: new Date().toISOString(),
+          gateway_port: gatewayManager?.getCurrentPort() || 'not-started'
+        }));
+      } else {
+        res.writeHead(404);
+        res.end('Not Found');
+      }
+    });
+    
+    server.listen(port, () => {
+      Logger.info(`🏥 Health endpoint listening on port ${port}`);
+    });
+  }
   
   // Log startup information
   Logger.logStartup();
