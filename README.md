@@ -134,7 +134,7 @@ management systems.
   [Interactive Brokers API Documentation](https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi-v1/#introduction)
 - **MCP Protocol**:
   [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
-- **This Server**: Open an issue in this repository
+- **This Server**: Open an issue in this repository.
 
 ## License
 
