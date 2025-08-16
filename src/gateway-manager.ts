@@ -78,6 +78,120 @@ export class IBGatewayManager {
     });
   }
 
+  private async isGatewayHealthy(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      // Try to make a simple HTTP request to the Gateway health endpoint
+      const https = require('https');
+      const options = {
+        hostname: 'localhost',
+        port: port,
+        path: '/v1/api/portal/iserver/auth/status',
+        method: 'GET',
+        timeout: 2000,
+        rejectUnauthorized: false, // IB Gateway uses self-signed certificates
+      };
+
+      const req = https.request(options, (res: any) => {
+        // Any response (even error responses) means the Gateway is running
+        resolve(true);
+      });
+
+      req.on('error', () => {
+        // Connection error means Gateway is not running or not healthy
+        resolve(false);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+
+      req.end();
+    });
+  }
+
+  private async findExistingGateway(): Promise<number | null> {
+    const commonPorts = [5000, 5001, 5002, 5003, 5004, 5005];
+    
+    this.log('🔍 Checking for existing Gateway instances...');
+    
+    for (const port of commonPorts) {
+      const isInUse = !(await this.isPortAvailable(port));
+      if (isInUse) {
+        this.log(`🔍 Found service on port ${port}, checking if it's a healthy Gateway...`);
+        const isHealthy = await this.isGatewayHealthy(port);
+        if (isHealthy) {
+          this.log(`✅ Found healthy existing Gateway on port ${port}`);
+          return port;
+        } else {
+          this.log(`❌ Port ${port} is occupied but not a healthy Gateway`);
+        }
+      }
+    }
+    
+    this.log('🚫 No existing healthy Gateway found');
+    return null;
+  }
+
+  private async killZombieGatewayProcesses(): Promise<void> {
+    return new Promise((resolve) => {
+      const platform = os.platform();
+      let command: string;
+      
+      // Find processes that might be zombie Gateway instances
+      switch (platform) {
+        case 'win32':
+          command = 'tasklist /FI "IMAGENAME eq java.exe" /FO CSV';
+          break;
+        case 'darwin':
+        case 'linux':
+          command = 'ps aux | grep "clientportal.gw" | grep -v grep';
+          break;
+        default:
+          command = 'ps aux | grep "clientportal.gw" | grep -v grep';
+          break;
+      }
+      
+      exec(command, (error, stdout, stderr) => {
+        if (error || !stdout.trim()) {
+          this.log('🧹 No zombie Gateway processes found');
+          resolve();
+          return;
+        }
+        
+        const lines = stdout.trim().split('\n');
+        if (lines.length === 0) {
+          this.log('🧹 No zombie Gateway processes found');
+          resolve();
+          return;
+        }
+        
+        this.log(`🧹 Found ${lines.length} potential Gateway processes, checking if they need cleanup...`);
+        
+        // For now, just log the processes - we could add actual killing logic here if needed
+        // But it's safer to let the user handle zombie processes manually
+        lines.forEach((line, index) => {
+          if (platform === 'win32') {
+            // Windows CSV format
+            const parts = line.split('","');
+            if (parts.length > 1) {
+              this.log(`   Process ${index + 1}: ${parts[0]?.replace(/"/g, '')} - ${parts[1]?.replace(/"/g, '')}`);
+            }
+          } else {
+            // Unix format
+            const parts = line.trim().split(/\s+/);
+            if (parts.length > 1) {
+              this.log(`   Process ${index + 1}: PID ${parts[1]} - ${parts.slice(10).join(' ')}`);
+            }
+          }
+        });
+        
+        this.log('💡 If you have zombie Gateway processes, you may need to kill them manually');
+        resolve();
+      });
+    });
+  }
+
   private async findAvailablePort(startPort: number = 5000, maxAttempts: number = 10): Promise<number> {
     for (let i = 0; i < maxAttempts; i++) {
       const port = startPort + i;
@@ -240,8 +354,21 @@ export class IBGatewayManager {
     try {
       await this.ensureGatewayExists();
       
-      // Check if default port 5000 is available, if not try to find an alternative
-      this.log('🔍 Checking port availability...');
+      // First, check if there's already a healthy Gateway running that we can reuse
+      const existingPort = await this.findExistingGateway();
+      if (existingPort) {
+        this.currentPort = existingPort;
+        this.isReady = true;
+        this.isStarting = false;
+        this.log(`🎯 Reusing existing Gateway on port ${existingPort} instead of starting new instance`);
+        return;
+      }
+      
+      // Check for zombie processes that might be blocking ports
+      await this.killZombieGatewayProcesses();
+      
+      // No existing Gateway found, proceed with starting a new one
+      this.log('🔍 Checking port availability for new Gateway...');
       const defaultPort = 5000;
       
       if (await this.isPortAvailable(defaultPort)) {
