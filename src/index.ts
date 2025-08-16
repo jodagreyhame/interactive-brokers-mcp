@@ -203,31 +203,14 @@ if (isMainModule) {
   process.env.SUPPRESS_LOAD_MESSAGE = '1';
   process.env.NO_UPDATE_NOTIFIER = '1';
   
-  // Check if we're running on Railway and set up health endpoint
-  if (process.env.RAILWAY_ENVIRONMENT) {
-    Logger.info('🚂 Detected Railway environment, setting up health endpoint...');
-    const port = process.env.PORT || '3000';
-    
-    // Simple HTTP server for Railway health checks
-    const http = require('http');
-    const server = http.createServer((req: any, res: any) => {
-      if (req.url === '/health' || req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          status: 'healthy', 
-          service: 'ib-mcp-server',
-          timestamp: new Date().toISOString(),
-          gateway_port: gatewayManager?.getCurrentPort() || 'not-started'
-        }));
-      } else {
-        res.writeHead(404);
-        res.end('Not Found');
-      }
-    });
-    
-    server.listen(port, () => {
-      Logger.info(`🏥 Health endpoint listening on port ${port}`);
-    });
+  // Log environment info for debugging MCP plugin issues
+  Logger.info(`🔍 Environment: PWD=${process.cwd()}, NODE_ENV=${process.env.NODE_ENV || 'undefined'}`);
+  Logger.info(`🔍 Process: npm_execpath=${process.env.npm_execpath || 'undefined'}, npm_command=${process.env.npm_command || 'undefined'}`);
+  
+  // Check if we're running in npx/MCP plugin context
+  const isNpx = process.env.npm_execpath?.includes('npx') || process.cwd().includes('.npm');
+  if (isNpx) {
+    Logger.info('📦 Detected npx execution - likely running via MCP community plugin');
   }
   
   // Log startup information

@@ -175,6 +175,49 @@ export class IBGatewayManager {
     });
   }
 
+  private async logSystemResources(): Promise<void> {
+    try {
+      const memUsage = process.memoryUsage();
+      const memUsedMB = Math.round(memUsage.rss / 1024 / 1024);
+      const memHeapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      
+      this.log(`📊 System resources: Memory ${memUsedMB}MB (heap: ${memHeapMB}MB)`);
+      
+      // Check available memory on system (Linux/Mac)
+      if (os.platform() !== 'win32') {
+        exec('free -m 2>/dev/null || vm_stat 2>/dev/null | head -5', (error, stdout) => {
+          if (!error && stdout.trim()) {
+            this.log(`📊 System memory info: ${stdout.trim().split('\n')[0]}`);
+          }
+        });
+      }
+    } catch (error) {
+      this.log('⚠️ Could not get system resource info');
+    }
+  }
+
+  private async checkConstrainedEnvironment(): Promise<boolean> {
+    const indicators = [
+      process.env.npm_execpath?.includes('npx'),
+      process.env.npm_command === 'exec',
+      process.env.NODE_ENV === undefined,
+      process.cwd().includes('.npm'),
+      process.cwd().includes('node_modules'),
+      process.env.PWD?.includes('.npm'),
+    ];
+    
+    const constraintCount = indicators.filter(Boolean).length;
+    const isConstrained = constraintCount >= 2;
+    
+    if (isConstrained) {
+      this.log(`🔍 Environment indicators: ${indicators.map((v, i) => 
+        ['npx', 'npm_exec', 'no_env', 'npm_cwd', 'node_modules', 'npm_pwd'][i] + ':' + v
+      ).join(', ')}`);
+    }
+    
+    return isConstrained;
+  }
+
   private async killZombieGatewayProcesses(): Promise<void> {
     return new Promise((resolve) => {
       const platform = os.platform();
@@ -394,6 +437,9 @@ export class IBGatewayManager {
     this.isStarting = true;
     
     try {
+      // Log system resources first
+      await this.logSystemResources();
+      
       await this.ensureGatewayExists();
       
       // First, check if there's already a healthy Gateway running that we can reuse
@@ -408,6 +454,12 @@ export class IBGatewayManager {
       
       // Check for zombie processes that might be blocking ports
       await this.killZombieGatewayProcesses();
+      
+      // Check if we're in a constrained environment (like MCP plugin)
+      const isConstrained = await this.checkConstrainedEnvironment();
+      if (isConstrained) {
+        this.log('⚠️ Detected constrained environment - Gateway startup may be limited by MCP plugin');
+      }
       
       // No existing Gateway found, proceed with starting a new one
       this.log('🔍 Checking port availability for new Gateway...');
