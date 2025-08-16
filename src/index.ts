@@ -183,6 +183,8 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
     Logger.error('Failed to initialize gateway:', error);
   });
 
+  Logger.info('Gateway starting...');
+
   // Create MCP server
   const server = new Server({
     name: "interactive-brokers-mcp",
@@ -196,6 +198,8 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
 
   // Register all tools with merged config
   registerTools(server, ibClient, gatewayManager || undefined, mergedConfig);
+
+  Logger.info('Tools registered');
 
   return server;
 }
