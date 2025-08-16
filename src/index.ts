@@ -103,7 +103,11 @@ async function initializeGateway(ibClient?: IBClient) {
 }
 
 // Cleanup function for gateway
-async function cleanupGateway() {
+async function cleanupGateway(signal?: string) {
+  if (signal) {
+    Logger.info(`🛑 Received ${signal}, cleaning up...`);
+  }
+  
   if (gatewayManager) {
     try {
       Logger.info('🛑 Shutting down IB Gateway...');
@@ -116,11 +120,27 @@ async function cleanupGateway() {
   }
 }
 
-// Set up shutdown handlers
-process.on('SIGINT', cleanupGateway);
-process.on('SIGTERM', cleanupGateway);
-process.on('exit', () => {
-  Logger.info('🛑 Process exiting...');
+// Set up shutdown handlers with better Railway compatibility
+process.on('SIGINT', () => cleanupGateway('SIGINT'));
+process.on('SIGTERM', () => cleanupGateway('SIGTERM')); // Railway uses SIGTERM for graceful shutdown
+process.on('SIGUSR2', () => cleanupGateway('SIGUSR2')); // Sometimes used by process managers
+process.on('exit', (code) => {
+  Logger.info(`🛑 Process exiting with code ${code}, ensuring cleanup...`);
+});
+
+// Handle uncaught exceptions gracefully
+process.on('uncaughtException', (error) => {
+  Logger.error('🚨 Uncaught exception:', error);
+  cleanupGateway('UNCAUGHT_EXCEPTION').finally(() => {
+    process.exit(1);
+  });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  Logger.error('🚨 Unhandled rejection at:', promise, 'reason:', reason);
+  cleanupGateway('UNHANDLED_REJECTION').finally(() => {
+    process.exit(1);
+  });
 });
 
 // Check if this module is being run directly (for stdio compatibility)

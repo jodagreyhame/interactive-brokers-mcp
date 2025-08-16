@@ -119,6 +119,10 @@ export class IBGatewayManager {
       const isInUse = !(await this.isPortAvailable(port));
       if (isInUse) {
         this.log(`🔍 Found service on port ${port}, checking if it's a healthy Gateway...`);
+        
+        // Get more info about what's running on this port
+        await this.identifyPortProcess(port);
+        
         const isHealthy = await this.isGatewayHealthy(port);
         if (isHealthy) {
           this.log(`✅ Found healthy existing Gateway on port ${port}`);
@@ -131,6 +135,44 @@ export class IBGatewayManager {
     
     this.log('🚫 No existing healthy Gateway found');
     return null;
+  }
+
+  private async identifyPortProcess(port: number): Promise<void> {
+    return new Promise((resolve) => {
+      const platform = os.platform();
+      let command: string;
+      
+      switch (platform) {
+        case 'win32':
+          command = `netstat -ano | findstr :${port}`;
+          break;
+        case 'darwin':
+          command = `lsof -i :${port} -n -P`;
+          break;
+        case 'linux':
+          command = `ss -tlnp | grep :${port} || netstat -tlnp | grep :${port}`;
+          break;
+        default:
+          command = `lsof -i :${port} -n -P`;
+          break;
+      }
+      
+      exec(command, (error, stdout, stderr) => {
+        if (error || !stdout.trim()) {
+          this.log(`   🔍 No detailed process info available for port ${port}`);
+          resolve();
+          return;
+        }
+        
+        const lines = stdout.trim().split('\n').slice(0, 3); // Limit output
+        lines.forEach((line, index) => {
+          if (line.trim()) {
+            this.log(`   📋 Port ${port} process ${index + 1}: ${line.trim()}`);
+          }
+        });
+        resolve();
+      });
+    });
   }
 
   private async killZombieGatewayProcesses(): Promise<void> {
