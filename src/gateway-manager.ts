@@ -80,6 +80,9 @@ export class IBGatewayManager {
 
   private async isGatewayHealthy(port: number): Promise<boolean> {
     return new Promise((resolve) => {
+      const startTime = Date.now();
+      this.log(`   ⏱️ Testing Gateway health on port ${port} (max 1s timeout)...`);
+      
       // Try to make a simple HTTP request to the Gateway health endpoint
       const https = require('https');
       const options = {
@@ -87,23 +90,40 @@ export class IBGatewayManager {
         port: port,
         path: '/v1/api/portal/iserver/auth/status',
         method: 'GET',
-        timeout: 2000,
+        timeout: 1000, // Reduced from 2000ms to 1000ms
         rejectUnauthorized: false, // IB Gateway uses self-signed certificates
       };
 
+      let completed = false;
+      const complete = (result: boolean, reason: string) => {
+        if (completed) return;
+        completed = true;
+        const elapsed = Date.now() - startTime;
+        this.log(`   ⏱️ Health check completed in ${elapsed}ms: ${result ? '✅ healthy' : '❌ ' + reason}`);
+        resolve(result);
+      };
+
+      // Additional safety timeout
+      const safetyTimeout = setTimeout(() => {
+        complete(false, 'safety timeout');
+      }, 1000);
+
       const req = https.request(options, (res: any) => {
+        clearTimeout(safetyTimeout);
         // Any response (even error responses) means the Gateway is running
-        resolve(true);
+        complete(true, 'responded');
       });
 
-      req.on('error', () => {
+      req.on('error', (error: any) => {
+        clearTimeout(safetyTimeout);
         // Connection error means Gateway is not running or not healthy
-        resolve(false);
+        complete(false, `connection error: ${error.code || error.message}`);
       });
 
       req.on('timeout', () => {
+        clearTimeout(safetyTimeout);
         req.destroy();
-        resolve(false);
+        complete(false, 'request timeout');
       });
 
       req.end();
@@ -180,14 +200,38 @@ export class IBGatewayManager {
       const memUsage = process.memoryUsage();
       const memUsedMB = Math.round(memUsage.rss / 1024 / 1024);
       const memHeapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      const memHeapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
       
-      this.log(`📊 System resources: Memory ${memUsedMB}MB (heap: ${memHeapMB}MB)`);
+      this.log(`📊 Process memory: Used ${memUsedMB}MB, Heap ${memHeapMB}/${memHeapTotalMB}MB`);
+      this.log(`📊 Node options: ${process.env.NODE_OPTIONS || 'not set'}`);
+      this.log(`📊 Process limits: uid=${process.getuid?.() || 'unknown'}, gid=${process.getgid?.() || 'unknown'}`);
       
       // Check available memory on system (Linux/Mac)
       if (os.platform() !== 'win32') {
-        exec('free -m 2>/dev/null || vm_stat 2>/dev/null | head -5', (error, stdout) => {
+        exec('free -m 2>/dev/null || vm_stat 2>/dev/null', (error, stdout) => {
           if (!error && stdout.trim()) {
-            this.log(`📊 System memory info: ${stdout.trim().split('\n')[0]}`);
+            const lines = stdout.trim().split('\n');
+            lines.slice(0, 2).forEach(line => {
+              if (line.includes('Mem:') || line.includes('total')) {
+                this.log(`📊 System memory: ${line.trim()}`);
+              }
+            });
+          }
+        });
+        
+        // Check container limits
+        exec('cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null', (error, stdout) => {
+          if (!error && stdout.trim()) {
+            const limitBytes = parseInt(stdout.trim());
+            const limitMB = Math.round(limitBytes / 1024 / 1024);
+            this.log(`📊 Container memory limit: ${limitMB}MB`);
+          }
+        });
+        
+        // Check if we're in a Docker container
+        exec('cat /proc/1/cgroup 2>/dev/null | grep docker', (error, stdout) => {
+          if (!error && stdout.trim()) {
+            this.log(`🐳 Running in Docker container`);
           }
         });
       }
@@ -458,7 +502,7 @@ export class IBGatewayManager {
       // Check if we're in a constrained environment (like MCP plugin)
       const isConstrained = await this.checkConstrainedEnvironment();
       if (isConstrained) {
-        this.log('⚠️ Detected constrained environment - Gateway startup may be limited by MCP plugin');
+        this.log('⚠️ Detected constrained environment - will attempt Gateway startup but may fail due to resource limits');
       }
       
       // No existing Gateway found, proceed with starting a new one

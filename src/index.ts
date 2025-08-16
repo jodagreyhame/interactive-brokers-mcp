@@ -120,22 +120,23 @@ async function cleanupGateway(signal?: string) {
   }
 }
 
-// Set up shutdown handlers with better Railway compatibility
+// Set up shutdown handlers with better MCP plugin compatibility
 let isShuttingDown = false;
 
-const gracefulShutdown = async (signal: string) => {
+const gracefulShutdown = (signal: string) => {
   if (isShuttingDown) {
-    Logger.warn(`⚠️ Already shutting down, ignoring ${signal}`);
-    return;
+    return; // Silent return to avoid log spam
   }
   isShuttingDown = true;
-  await cleanupGateway(signal);
-  process.exit(0);
+  
+  // Don't use async/await here to avoid potential hanging
+  cleanupGateway(signal).finally(() => {
+    process.exit(0);
+  });
 };
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // Railway uses SIGTERM for graceful shutdown
-process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2')); // Sometimes used by process managers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // MCP plugin uses SIGTERM
 process.on('exit', (code) => {
   Logger.info(`🛑 Process exiting with code ${code}, ensuring cleanup...`);
 });
