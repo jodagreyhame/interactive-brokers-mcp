@@ -78,6 +78,7 @@ server configuration:
     }
   }
 }
+
 ```
 
 In headless mode, the server will automatically authenticate using your
