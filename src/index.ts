@@ -186,28 +186,23 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
   Logger.info('Gateway starting...');
 
   // Create MCP server
-  try {
-    const server = new Server({
-      name: "interactive-brokers-mcp",
-      version: "1.0.0"
-    }, {
-      capabilities: {
-        tools: {},
-        logging: {},
-      }
-    });
-  
-    // Register all tools with merged config
-    registerTools(server, ibClient, gatewayManager || undefined, mergedConfig);
-  
-    Logger.info('Tools registered');
-  
-    return server;
-  } catch (error) {
-    Logger.error('Failed to create server:', error);
-  }
+  const server = new Server({
+    name: "interactive-brokers-mcp",
+    version: "1.0.0"
+  }, {
+    capabilities: {
+      tools: {},
+      logging: {},
+    }
+  });
 
-  
+  // Register all tools with merged config
+  registerTools(server, ibClient, gatewayManager || undefined, mergedConfig);
+
+  Logger.info('Tools registered');
+
+  return server;
+
 }
 
 if (isMainModule) {

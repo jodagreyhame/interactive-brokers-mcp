@@ -79,67 +79,61 @@ export class IBGatewayManager {
     });
   }
 
-  private async isGatewayHealthy(port: number): Promise<boolean> {
+  private async isGatewayProcess(port: number): Promise<boolean> {
     return new Promise((resolve) => {
       const startTime = Date.now();
-      this.log(`   ⏱️ Testing Gateway health on port ${port} (max 500ms timeout)...`);
+      this.log(`   ⏱️ Checking if port ${port} has Gateway process...`);
       
-      let completed = false;
-      const complete = (result: boolean, reason: string) => {
-        if (completed) return;
-        completed = true;
-        const elapsed = Date.now() - startTime;
-        this.log(`   ⏱️ Health check completed in ${elapsed}ms: ${result ? '✅ healthy' : '❌ ' + reason}`);
-        resolve(result);
-      };
-
-      // Very aggressive timeout to prevent hanging
-      const safetyTimeout = setTimeout(() => {
-        complete(false, 'safety timeout (500ms)');
-      }, 500);
-
-      try {
-        // Try to make a simple HTTP request to the Gateway health endpoint
-        const https = require('https');
-        const options = {
-          hostname: 'localhost',
-          port: port,
-          path: '/v1/api/portal/iserver/auth/status',
-          method: 'GET',
-          timeout: 300, // Very short timeout
-          rejectUnauthorized: false, // IB Gateway uses self-signed certificates
-        };
-
-        const req = https.request(options, (res: any) => {
-          clearTimeout(safetyTimeout);
-          // Any response (even error responses) means the Gateway is running
-          complete(true, 'responded');
-        });
-
-        req.on('error', (error: any) => {
-          clearTimeout(safetyTimeout);
-          // Connection error means Gateway is not running or not healthy
-          complete(false, `connection error: ${error.code || error.message}`);
-        });
-
-        req.on('timeout', () => {
-          clearTimeout(safetyTimeout);
-          req.destroy();
-          complete(false, 'request timeout');
-        });
-
-        // Set socket timeout as well
-        req.setTimeout(300, () => {
-          clearTimeout(safetyTimeout);
-          req.destroy();
-          complete(false, 'socket timeout');
-        });
-
-        req.end();
-      } catch (error) {
-        clearTimeout(safetyTimeout);
-        complete(false, `request creation error: ${error}`);
+      const platform = os.platform();
+      let command: string;
+      
+      switch (platform) {
+        case 'win32':
+          command = `netstat -ano | findstr :${port}`;
+          break;
+        case 'darwin':
+          command = `lsof -i :${port} -n -P`;
+          break;
+        case 'linux':
+          command = `ss -tlnp | grep :${port} || netstat -tlnp | grep :${port}`;
+          break;
+        default:
+          command = `lsof -i :${port} -n -P`;
+          break;
       }
+      
+      exec(command, (error, stdout, stderr) => {
+        const elapsed = Date.now() - startTime;
+        
+        if (error || !stdout.trim()) {
+          this.log(`   ⏱️ Process check completed in ${elapsed}ms: ❌ no process found`);
+          resolve(false);
+          return;
+        }
+        
+        const output = stdout.toLowerCase();
+        // Look for indicators that this is likely a Gateway process
+        const gatewayIndicators = [
+          'java',           // Gateway runs on Java
+          'clientportal',   // Gateway directory/process name
+          'gateway',        // Generic gateway indicator
+          'ib',            // Interactive Brokers
+        ];
+        
+        const isGateway = gatewayIndicators.some(indicator => output.includes(indicator));
+        
+        if (isGateway) {
+          this.log(`   ⏱️ Process check completed in ${elapsed}ms: ✅ Gateway process detected`);
+          // Log a sample of the process info for debugging
+          const firstLine = stdout.trim().split('\n')[0];
+          this.log(`   📋 Process info: ${firstLine}`);
+        } else {
+          this.log(`   ⏱️ Process check completed in ${elapsed}ms: ❌ non-Gateway process`);
+          this.log(`   📋 Process info: ${stdout.trim().split('\n')[0]}`);
+        }
+        
+        resolve(isGateway);
+      });
     });
   }
 
@@ -156,17 +150,17 @@ export class IBGatewayManager {
         // Get more info about what's running on this port
         await this.identifyPortProcess(port);
         
-        const isHealthy = await this.isGatewayHealthy(port);
-        if (isHealthy) {
-          this.log(`✅ Found healthy existing Gateway on port ${port}`);
+        const isGateway = await this.isGatewayProcess(port);
+        if (isGateway) {
+          this.log(`✅ Found existing Gateway on port ${port}`);
           return port;
         } else {
-          this.log(`❌ Port ${port} is occupied but not a healthy Gateway`);
+          this.log(`❌ Port ${port} is occupied but not a Gateway process`);
         }
       }
     }
     
-    this.log('🚫 No existing healthy Gateway found');
+    this.log('🚫 No existing Gateway found');
     return null;
   }
 
@@ -180,10 +174,10 @@ export class IBGatewayManager {
       try {
         const isInUse = !(await this.isPortAvailable(port));
         if (isInUse) {
-          this.log(`⚡ Quick health check on port ${port}...`);
-          const isHealthy = await this.isGatewayHealthy(port);
-          if (isHealthy) {
-            this.log(`✅ Found healthy existing Gateway on port ${port}`);
+          this.log(`⚡ Quick process check on port ${port}...`);
+          const isGateway = await this.isGatewayProcess(port);
+          if (isGateway) {
+            this.log(`✅ Found existing Gateway on port ${port}`);
             return port;
           }
         }
@@ -537,9 +531,22 @@ export class IBGatewayManager {
       return;
     }
     
-    this.backgroundStartupPromise = this.startGatewayInternal().catch(error => {
-      this.log(`❌ Background Gateway startup failed: ${error.message}`);
-      throw error;
+    // Wrap the startup in a promise that handles errors gracefully
+    this.backgroundStartupPromise = (async () => {
+      try {
+        await this.startGatewayInternal();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.log(`❌ Background Gateway startup failed: ${errorMessage}`);
+        // Reset the promise so sync startup can be attempted later
+        this.backgroundStartupPromise = null;
+        throw error;
+      }
+    })();
+    
+    // Add unhandled rejection handler to prevent process termination
+    this.backgroundStartupPromise.catch((error) => {
+      // Error already logged above, just prevent unhandled rejection
     });
   }
   
@@ -563,11 +570,18 @@ export class IBGatewayManager {
     // Wait for background startup if it's running
     if (this.backgroundStartupPromise) {
       this.log('⏳ Waiting for background Gateway startup to complete...');
-      await this.backgroundStartupPromise;
-      return;
+      try {
+        await this.backgroundStartupPromise;
+        if (this.isReady) {
+          return;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.log(`⚠️ Background startup failed, attempting synchronous start: ${errorMessage}`);
+      }
     }
     
-    // If no background startup, start synchronously
+    // If no background startup or it failed, start synchronously
     this.log('⏳ Starting Gateway synchronously...');
     await this.startGatewayInternal();
   }
