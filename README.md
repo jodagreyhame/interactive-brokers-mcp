@@ -4,18 +4,24 @@
 <img src="https://www.interactivebrokers.com/images/web/logos/ib-logo-text-black.svg" alt="Interactive Brokers" width="300">
 </div>
 
-> **⚠️ DISCLAIMER**: This is an **unofficial**, community-developed MCP server and is **NOT** affiliated with or endorsed by Interactive Brokers. This software is in **Alpha state** and may not work perfectly.
+> **⚠️ DISCLAIMER**: This is an **unofficial**, community-developed MCP server
+> and is **NOT** affiliated with or endorsed by Interactive Brokers. This
+> software is in **Alpha state** and may not work perfectly.
 
-A Model Context Protocol (MCP) server that provides integration with Interactive Brokers' trading platform. This server allows AI assistants to interact with your IB account to retrieve market data, check positions, and place trades.
+A Model Context Protocol (MCP) server that provides integration with Interactive
+Brokers' trading platform. This server allows AI assistants to interact with
+your IB account to retrieve market data, check positions, and place trades.
 
 ## 🔒 Security Notice
 
-**This MCP server is designed to run locally only** for security reasons. Never deploy this to remote servers or cloud platforms as it handles sensitive trading credentials and financial data.
+**This MCP server is designed to run locally only** for security reasons. Never
+deploy this to remote servers or cloud platforms as it handles sensitive trading
+credentials and financial data.
 
 ## ✨ Features
 
 - **Account Management**: Get account information and balances
-- **Position Tracking**: View current positions and P&L  
+- **Position Tracking**: View current positions and P&L
 - **Market Data**: Real-time market data for stocks and instruments
 - **Order Management**: Place market, limit, and stop orders
 - **Order Monitoring**: Check order status and execution details
@@ -23,11 +29,13 @@ A Model Context Protocol (MCP) server that provides integration with Interactive
 ## Prerequisites
 
 **No additional installations required!** This package includes:
+
 - Pre-configured IB Gateway for all platforms (Linux, macOS, Windows)
 - Java Runtime Environment (JRE) for IB Gateway
 - All necessary dependencies
 
 You only need:
+
 - Interactive Brokers account (paper or live trading)
 - Node.js 18+ (for running the MCP server)
 
@@ -46,11 +54,15 @@ Add this MCP server to your Cursor/Claude configuration:
 }
 ```
 
-When you first use the server, a web browser window will automatically open for the Interactive Brokers OAuth authentication flow. Log in with your IB credentials to authorize the connection.
+When you first use the server, a web browser window will automatically open for
+the Interactive Brokers OAuth authentication flow. Log in with your IB
+credentials to authorize the connection.
 
 ## Headless Mode Configuration
 
-For automated environments or when you prefer not to use a browser for authentication, you can enable headless mode by configuring it in your MCP server configuration:
+For automated environments or when you prefer not to use a browser for
+authentication, you can enable headless mode by configuring it in your MCP
+server configuration:
 
 ```json
 {
@@ -68,47 +80,60 @@ For automated environments or when you prefer not to use a browser for authentic
 }
 ```
 
-In headless mode, the server will automatically authenticate using your credentials without opening a browser window. This is useful for:
+In headless mode, the server will automatically authenticate using your
+credentials without opening a browser window. This is useful for:
+
 - Automated trading systems
 - Server environments without a display
 - CI/CD pipelines
 - Situations where browser interaction is not desired
 
-**Important**: Even in headless mode, Interactive Brokers may still require two-factor authentication (2FA). When 2FA is triggered, the headless authentication will wait for you to complete the 2FA process through your configured method (mobile app, SMS, etc.) before proceeding.
+**Important**: Even in headless mode, Interactive Brokers may still require
+two-factor authentication (2FA). When 2FA is triggered, the headless
+authentication will wait for you to complete the 2FA process through your
+configured method (mobile app, SMS, etc.) before proceeding.
 
-**Security Note**: Store credentials securely and never commit them to version control. Consider using environment variable files or secure credential management systems.
+**Security Note**: Store credentials securely and never commit them to version
+control. Consider using environment variable files or secure credential
+management systems.
 
 ## Available MCP Tools
 
-| Tool | Description |
-|------|-------------|
+| Tool               | Description                               |
+| ------------------ | ----------------------------------------- |
 | `get_account_info` | Retrieve account information and balances |
-| `get_positions` | Get current positions and P&L |
-| `get_market_data` | Real-time market data for symbols |
-| `place_order` | Place market, limit, or stop orders |
-| `get_order_status` | Check order execution status |
+| `get_positions`    | Get current positions and P&L             |
+| `get_market_data`  | Real-time market data for symbols         |
+| `place_order`      | Place market, limit, or stop orders       |
+| `get_order_status` | Check order execution status              |
 
 ## Troubleshooting
 
 **Authentication Problems:**
+
 - Use the web interface that opens automatically
 - Complete any required two-factor authentication
 - Try paper trading mode if live trading fails
-
 
 ## Security & Risk Disclaimer
 
 ⚠️ **IMPORTANT WARNINGS:**
 
-- **Financial Risk**: Trading involves substantial risk of loss. Always test with paper trading first.
-- **Security**: This software handles sensitive financial data. Only run locally, never on public servers.
-- **No Warranty**: This unofficial software comes with no warranties. Use at your own risk.
-- **Not Financial Advice**: This tool is for automation only, not financial advice.
+- **Financial Risk**: Trading involves substantial risk of loss. Always test
+  with paper trading first.
+- **Security**: This software handles sensitive financial data. Only run
+  locally, never on public servers.
+- **No Warranty**: This unofficial software comes with no warranties. Use at
+  your own risk.
+- **Not Financial Advice**: This tool is for automation only, not financial
+  advice.
 
 ## Support
 
-- **IB Gateway Issues**: [Interactive Brokers API Documentation](https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi-v1/#introduction)
-- **MCP Protocol**: [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
+- **IB Gateway Issues**:
+  [Interactive Brokers API Documentation](https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi-v1/#introduction)
+- **MCP Protocol**:
+  [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
 - **This Server**: Open an issue in this repository
 
 ## License
