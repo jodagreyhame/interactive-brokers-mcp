@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import os from 'os';
+import { Logger } from '../logger';
 
 export class PortUtils {
   static async isPortAvailable(port: number): Promise<boolean> {
@@ -72,6 +73,7 @@ export class PortUtils {
         }
         
         const output = stdout.toLowerCase();
+        Logger.info(`Existing process running on port ${port}: ${output}`);
         // Look for indicators that this is likely a Gateway process
         const gatewayIndicators = [
           'java',           // Gateway runs on Java
