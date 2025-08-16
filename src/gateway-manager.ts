@@ -1,11 +1,11 @@
-import { spawn, ChildProcess, exec } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { Logger } from './logger.js';
-import os from 'os';
-// No more runtime builder imports needed
+import { PortUtils } from './utils/port-utils.js';
+import { ConfigUtils } from './utils/config-utils.js';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,367 +22,42 @@ export class IBGatewayManager {
   private backgroundStartupPromise: Promise<void> | null = null;
 
   constructor() {
-    // Gateway directory is relative to the project root (one level up from src)
     this.gatewayDir = path.join(__dirname, '../ib-gateway');
-    // Runtime directory points to pre-built custom runtimes
     this.jreDir = path.join(__dirname, '../runtime');
-    // Determine if we should use stderr for logging (STDIO mode)
     this.useStderr = !(process.env.MCP_HTTP_SERVER === 'true' || process.argv.includes('--http'));
-    
-    // Register cleanup handlers to ensure child processes are killed
     this.registerCleanupHandlers();
   }
 
   private log(message: string) {
-    // Use Logger for MCP-safe logging
     Logger.info(message);
   }
 
-  private async isPortAvailable(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const platform = os.platform();
-      let command: string;
-      
-      // Use OS-specific commands to check if port is in use
-      switch (platform) {
-        case 'win32':
-          // Windows: Use netstat to check if port is listening
-          command = `netstat -an | findstr :${port}`;
-          break;
-        case 'darwin':
-        case 'linux':
-          // macOS/Linux: Use lsof to check if port is in use
-          command = `lsof -i :${port}`;
-          break;
-        default:
-          // Fallback for other platforms
-          command = `netstat -an | grep :${port}`;
-          break;
-      }
-      
-      exec(command, (error, stdout, stderr) => {
-        if (error) {
-          // Command failed or no processes found using the port - port is available
-          resolve(true);
-        } else {
-          // Command succeeded and found processes using the port - port is not available
-          const output = stdout.trim();
-          if (output === '') {
-            // No output means port is available
-            resolve(true);
-          } else {
-            // Output found means port is in use
-            resolve(false);
-          }
-        }
-      });
-    });
-  }
 
-  private async isGatewayProcess(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const startTime = Date.now();
-      this.log(`   ⏱️ Checking if port ${port} has Gateway process...`);
-      
-      const platform = os.platform();
-      let command: string;
-      
-      switch (platform) {
-        case 'win32':
-          command = `netstat -ano | findstr :${port}`;
-          break;
-        case 'darwin':
-          command = `lsof -i :${port} -n -P`;
-          break;
-        case 'linux':
-          command = `ss -tlnp | grep :${port} || netstat -tlnp | grep :${port}`;
-          break;
-        default:
-          command = `lsof -i :${port} -n -P`;
-          break;
-      }
-      
-      exec(command, (error, stdout, stderr) => {
-        const elapsed = Date.now() - startTime;
-        
-        if (error || !stdout.trim()) {
-          this.log(`   ⏱️ Process check completed in ${elapsed}ms: ❌ no process found`);
-          resolve(false);
-          return;
-        }
-        
-        const output = stdout.toLowerCase();
-        // Look for indicators that this is likely a Gateway process
-        const gatewayIndicators = [
-          'java',           // Gateway runs on Java
-          'clientportal',   // Gateway directory/process name
-          'gateway',        // Generic gateway indicator
-          'ib',            // Interactive Brokers
-        ];
-        
-        const isGateway = gatewayIndicators.some(indicator => output.includes(indicator));
-        
-        if (isGateway) {
-          this.log(`   ⏱️ Process check completed in ${elapsed}ms: ✅ Gateway process detected`);
-          // Log a sample of the process info for debugging
-          const firstLine = stdout.trim().split('\n')[0];
-          this.log(`   📋 Process info: ${firstLine}`);
-        } else {
-          this.log(`   ⏱️ Process check completed in ${elapsed}ms: ❌ non-Gateway process`);
-          this.log(`   📋 Process info: ${stdout.trim().split('\n')[0]}`);
-        }
-        
-        resolve(isGateway);
-      });
-    });
-  }
 
   private async findExistingGateway(): Promise<number | null> {
-    const commonPorts = [5000, 5001, 5002, 5003, 5004, 5005];
-    
     this.log('🔍 Checking for existing Gateway instances...');
-    
-    for (const port of commonPorts) {
-      const isInUse = !(await this.isPortAvailable(port));
-      if (isInUse) {
-        this.log(`🔍 Found service on port ${port}, checking if it's a healthy Gateway...`);
-        
-        // Get more info about what's running on this port
-        await this.identifyPortProcess(port);
-        
-        const isGateway = await this.isGatewayProcess(port);
-        if (isGateway) {
-          this.log(`✅ Found existing Gateway on port ${port}`);
-          return port;
-        } else {
-          this.log(`❌ Port ${port} is occupied but not a Gateway process`);
-        }
-      }
+    const existingPort = await PortUtils.findExistingGateway();
+    if (existingPort) {
+      this.log(`✅ Found existing Gateway on port ${existingPort}`);
+    } else {
+      this.log('🚫 No existing Gateway found');
     }
-    
-    this.log('🚫 No existing Gateway found');
-    return null;
+    return existingPort;
   }
 
-  // Quick check for existing Gateway during init (aggressive timeouts)
   async quickCheckExistingGateway(): Promise<number | null> {
-    const commonPorts = [5000, 5001, 5002, 5003, 5004, 5005];
-    
     this.log('⚡ Quick check for existing Gateway instances...');
-    
-    for (const port of commonPorts) {
-      try {
-        const isInUse = !(await this.isPortAvailable(port));
-        if (isInUse) {
-          this.log(`⚡ Quick process check on port ${port}...`);
-          const isGateway = await this.isGatewayProcess(port);
-          if (isGateway) {
-            this.log(`✅ Found existing Gateway on port ${port}`);
-            return port;
-          }
-        }
-      } catch (error) {
-        // Ignore errors during quick check - we'll handle them later
-        this.log(`⚡ Quick check failed for port ${port}, continuing...`);
-      }
-    }
-    
-    this.log('⚡ Quick check complete - no existing Gateway found');
-    return null;
-  }
-
-  private async identifyPortProcess(port: number): Promise<void> {
-    return new Promise((resolve) => {
-      const platform = os.platform();
-      let command: string;
-      
-      switch (platform) {
-        case 'win32':
-          command = `netstat -ano | findstr :${port}`;
-          break;
-        case 'darwin':
-          command = `lsof -i :${port} -n -P`;
-          break;
-        case 'linux':
-          command = `ss -tlnp | grep :${port} || netstat -tlnp | grep :${port}`;
-          break;
-        default:
-          command = `lsof -i :${port} -n -P`;
-          break;
-      }
-      
-      exec(command, (error, stdout, stderr) => {
-        if (error || !stdout.trim()) {
-          this.log(`   🔍 No detailed process info available for port ${port}`);
-          resolve();
-          return;
-        }
-        
-        const lines = stdout.trim().split('\n').slice(0, 3); // Limit output
-        lines.forEach((line, index) => {
-          if (line.trim()) {
-            this.log(`   📋 Port ${port} process ${index + 1}: ${line.trim()}`);
-          }
-        });
-        resolve();
-      });
-    });
-  }
-
-  private async logSystemResources(): Promise<void> {
     try {
-      const memUsage = process.memoryUsage();
-      const memUsedMB = Math.round(memUsage.rss / 1024 / 1024);
-      const memHeapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-      const memHeapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
-      
-      this.log(`📊 Process memory: Used ${memUsedMB}MB, Heap ${memHeapMB}/${memHeapTotalMB}MB`);
-      this.log(`📊 Node options: ${process.env.NODE_OPTIONS || 'not set'}`);
-      this.log(`📊 Process limits: uid=${process.getuid?.() || 'unknown'}, gid=${process.getgid?.() || 'unknown'}`);
-      
-      // Check available memory on system (Linux/Mac)
-      if (os.platform() !== 'win32') {
-        exec('free -m 2>/dev/null || vm_stat 2>/dev/null', (error, stdout) => {
-          if (!error && stdout.trim()) {
-            const lines = stdout.trim().split('\n');
-            lines.slice(0, 2).forEach(line => {
-              if (line.includes('Mem:') || line.includes('total')) {
-                this.log(`📊 System memory: ${line.trim()}`);
-              }
-            });
-          }
-        });
-        
-        // Check container limits
-        exec('cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null', (error, stdout) => {
-          if (!error && stdout.trim()) {
-            const limitBytes = parseInt(stdout.trim());
-            const limitMB = Math.round(limitBytes / 1024 / 1024);
-            this.log(`📊 Container memory limit: ${limitMB}MB`);
-          }
-        });
-        
-        // Check if we're in a Docker container
-        exec('cat /proc/1/cgroup 2>/dev/null | grep docker', (error, stdout) => {
-          if (!error && stdout.trim()) {
-            this.log(`🐳 Running in Docker container`);
-          }
-        });
+      const existingPort = await PortUtils.findExistingGateway();
+      if (existingPort) {
+        this.log(`✅ Found existing Gateway on port ${existingPort}`);
+      } else {
+        this.log('⚡ Quick check complete - no existing Gateway found');
       }
+      return existingPort;
     } catch (error) {
-      this.log('⚠️ Could not get system resource info');
-    }
-  }
-
-  private async checkConstrainedEnvironment(): Promise<boolean> {
-    const indicators = [
-      process.env.npm_execpath?.includes('npx'),
-      process.env.npm_command === 'exec',
-      process.env.NODE_ENV === undefined,
-      process.cwd().includes('.npm'),
-      process.cwd().includes('node_modules'),
-      process.env.PWD?.includes('.npm'),
-    ];
-    
-    const constraintCount = indicators.filter(Boolean).length;
-    const isConstrained = constraintCount >= 2;
-    
-    if (isConstrained) {
-      this.log(`🔍 Environment indicators: ${indicators.map((v, i) => 
-        ['npx', 'npm_exec', 'no_env', 'npm_cwd', 'node_modules', 'npm_pwd'][i] + ':' + v
-      ).join(', ')}`);
-    }
-    
-    return isConstrained;
-  }
-
-  private async killZombieGatewayProcesses(): Promise<void> {
-    return new Promise((resolve) => {
-      const platform = os.platform();
-      let command: string;
-      
-      // Find processes that might be zombie Gateway instances
-      switch (platform) {
-        case 'win32':
-          command = 'tasklist /FI "IMAGENAME eq java.exe" /FO CSV';
-          break;
-        case 'darwin':
-        case 'linux':
-          command = 'ps aux | grep "clientportal.gw" | grep -v grep';
-          break;
-        default:
-          command = 'ps aux | grep "clientportal.gw" | grep -v grep';
-          break;
-      }
-      
-      exec(command, (error, stdout, stderr) => {
-        if (error || !stdout.trim()) {
-          this.log('🧹 No zombie Gateway processes found');
-          resolve();
-          return;
-        }
-        
-        const lines = stdout.trim().split('\n');
-        if (lines.length === 0) {
-          this.log('🧹 No zombie Gateway processes found');
-          resolve();
-          return;
-        }
-        
-        this.log(`🧹 Found ${lines.length} potential Gateway processes, checking if they need cleanup...`);
-        
-        // For now, just log the processes - we could add actual killing logic here if needed
-        // But it's safer to let the user handle zombie processes manually
-        lines.forEach((line, index) => {
-          if (platform === 'win32') {
-            // Windows CSV format
-            const parts = line.split('","');
-            if (parts.length > 1) {
-              this.log(`   Process ${index + 1}: ${parts[0]?.replace(/"/g, '')} - ${parts[1]?.replace(/"/g, '')}`);
-            }
-          } else {
-            // Unix format
-            const parts = line.trim().split(/\s+/);
-            if (parts.length > 1) {
-              this.log(`   Process ${index + 1}: PID ${parts[1]} - ${parts.slice(10).join(' ')}`);
-            }
-          }
-        });
-        
-        this.log('💡 If you have zombie Gateway processes, you may need to kill them manually');
-        resolve();
-      });
-    });
-  }
-
-  private async findAvailablePort(startPort: number = 5000, maxAttempts: number = 10): Promise<number> {
-    for (let i = 0; i < maxAttempts; i++) {
-      const port = startPort + i;
-      const available = await this.isPortAvailable(port);
-      if (available) {
-        this.log(`✅ Found available port: ${port}`);
-        return port;
-      }
-      this.log(`❌ Port ${port} is already in use`);
-    }
-    throw new Error(`No available ports found in range ${startPort}-${startPort + maxAttempts - 1}`);
-  }
-
-  private async createTempConfigWithPort(port: number): Promise<void> {
-    const originalConfigPath = path.join(this.gatewayDir, 'clientportal.gw/root/conf.yaml');
-    const tempConfigPath = path.join(this.gatewayDir, `clientportal.gw/root/conf-${port}.yaml`);
-    
-    try {
-      // Read the original config
-      const content = await fs.readFile(originalConfigPath, 'utf8');
-      // Replace the port
-      const updatedContent = content.replace(/listenPort:\s*\d+/, `listenPort: ${port}`);
-      // Write to temp config file
-      await fs.writeFile(tempConfigPath, updatedContent, 'utf8');
-      this.log(`📝 Created temporary config file with port ${port}`);
-    } catch (error) {
-      Logger.error(`❌ Failed to create temporary config file:`, error);
-      throw error;
+      this.log('⚡ Quick check failed, continuing...');
+      return null;
     }
   }
 
@@ -440,7 +115,7 @@ export class IBGatewayManager {
       }
       
       // Clean up temporary config files
-      await this.cleanupTempConfigFiles();
+      await ConfigUtils.cleanupTempConfigFiles(this.gatewayDir);
     } catch (error) {
       Logger.error('❌ Error during cleanup:', error);
       // Force kill as fallback
@@ -448,23 +123,7 @@ export class IBGatewayManager {
     }
   }
 
-  private async cleanupTempConfigFiles(): Promise<void> {
-    try {
-      const configDir = path.join(this.gatewayDir, 'clientportal.gw/root');
-      const files = await fs.readdir(configDir);
-      
-      for (const file of files) {
-        if (file.match(/^conf-\d+\.yaml$/)) {
-          const filePath = path.join(configDir, file);
-          await fs.unlink(filePath);
-          this.log(`🗑️ Cleaned up temporary config file: ${file}`);
-        }
-      }
-    } catch (error) {
-      // Don't throw errors for cleanup failures
-      this.log(`⚠️ Warning: Could not clean up temporary config files: ${error}`);
-    }
-  }
+
 
   private forceKillGateway(): void {
     if (this.gatewayProcess && !this.gatewayProcess.killed) {
@@ -591,7 +250,6 @@ export class IBGatewayManager {
     await this.quickStartGateway();
   }
 
-  // Original startup logic (now internal)
   private async startGatewayInternal(): Promise<void> {
     if (this.isStarting || this.isReady) {
       this.log('Gateway is already starting or ready');
@@ -601,36 +259,24 @@ export class IBGatewayManager {
     this.isStarting = true;
     
     try {
-      // Log system resources first
-      await this.logSystemResources();
-      
       await this.ensureGatewayExists();
       
-      // Check for zombie processes that might be blocking ports
-      await this.killZombieGatewayProcesses();
-      
-      // Check if we're in a constrained environment (like MCP plugin)
-      const isConstrained = await this.checkConstrainedEnvironment();
-      if (isConstrained) {
-        this.log('⚠️ Detected constrained environment - will attempt Gateway startup but may fail due to resource limits');
-      }
-      
-      // No existing Gateway found, proceed with starting a new one
+      // Check port availability for new Gateway
       this.log('🔍 Checking port availability for new Gateway...');
       const defaultPort = 5000;
       
-      if (await this.isPortAvailable(defaultPort)) {
+      if (await PortUtils.isPortAvailable(defaultPort)) {
         this.currentPort = defaultPort;
         this.log(`✅ Using default port ${defaultPort}`);
       } else {
         this.log(`❌ Default port ${defaultPort} is occupied, trying to find alternative...`);
         try {
-          this.currentPort = await this.findAvailablePort(5001, 9); // Try 5001-5009
+          this.currentPort = await PortUtils.findAvailablePort(5001, 9); // Try 5001-5009
           this.log(`✅ Found alternative port ${this.currentPort}`);
           
-          // Since IB Gateway doesn't support port override via command line,
-          // we'll need to create a temporary config file with the new port
-          await this.createTempConfigWithPort(this.currentPort);
+          // Create a temporary config file with the new port
+          await ConfigUtils.createTempConfigWithPort(this.gatewayDir, this.currentPort);
+          this.log(`📝 Created temporary config file with port ${this.currentPort}`);
         } catch (error) {
           this.log(`❌ No alternative ports available, will try with default port anyway`);
           this.currentPort = defaultPort;
@@ -639,6 +285,8 @@ export class IBGatewayManager {
       
       const bundledJavaPath = this.getJavaPath();
       const bundledJavaHome = path.dirname(path.dirname(bundledJavaPath));
+      const bundledJavaLibPath = path.join(bundledJavaHome, 'lib');
+      const bundledJavaServerLibPath = path.join(bundledJavaLibPath, 'server');
       
       const configFile = this.currentPort === defaultPort ? 'root/conf.yaml' : `root/conf-${this.currentPort}.yaml`;
       const jarPath = path.join(this.gatewayDir, 'clientportal.gw/dist/ibgroup.web.core.iblink.router.clientportal.gw.jar');
@@ -649,6 +297,8 @@ export class IBGatewayManager {
 
       this.log('🚀 Starting IB Gateway with bundled JRE...');
       this.log('   Java: ' + bundledJavaPath);
+      this.log('   Java Home: ' + bundledJavaHome);
+      this.log('   Lib Path: ' + `${bundledJavaServerLibPath}:${bundledJavaLibPath}`);
       this.log('   Config: ' + configFile);
       this.log('   Port: ' + this.currentPort);
       
@@ -669,7 +319,8 @@ export class IBGatewayManager {
         cwd: path.join(this.gatewayDir, 'clientportal.gw'),
         env: {
           ...process.env,
-          JAVA_HOME: bundledJavaHome
+          JAVA_HOME: bundledJavaHome,
+          LD_LIBRARY_PATH: `${bundledJavaServerLibPath}:${bundledJavaLibPath}:${process.env.LD_LIBRARY_PATH || ''}`
         },
         stdio: ['ignore', 'pipe', 'pipe']
       });
