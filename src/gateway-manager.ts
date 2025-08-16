@@ -19,6 +19,7 @@ export class IBGatewayManager {
   private useStderr: boolean;
   private cleanupHandlersRegistered = false;
   private currentPort: number = 5000;
+  private backgroundStartupPromise: Promise<void> | null = null;
 
   constructor() {
     // Gateway directory is relative to the project root (one level up from src)
@@ -166,6 +167,33 @@ export class IBGatewayManager {
     }
     
     this.log('🚫 No existing healthy Gateway found');
+    return null;
+  }
+
+  // Quick check for existing Gateway during init (aggressive timeouts)
+  async quickCheckExistingGateway(): Promise<number | null> {
+    const commonPorts = [5000, 5001, 5002, 5003, 5004, 5005];
+    
+    this.log('⚡ Quick check for existing Gateway instances...');
+    
+    for (const port of commonPorts) {
+      try {
+        const isInUse = !(await this.isPortAvailable(port));
+        if (isInUse) {
+          this.log(`⚡ Quick health check on port ${port}...`);
+          const isHealthy = await this.isGatewayHealthy(port);
+          if (isHealthy) {
+            this.log(`✅ Found healthy existing Gateway on port ${port}`);
+            return port;
+          }
+        }
+      } catch (error) {
+        // Ignore errors during quick check - we'll handle them later
+        this.log(`⚡ Quick check failed for port ${port}, continuing...`);
+      }
+    }
+    
+    this.log('⚡ Quick check complete - no existing Gateway found');
     return null;
   }
 
@@ -484,7 +512,73 @@ export class IBGatewayManager {
     }
   }
 
+  // Public method for fast initialization (used during server startup)
+  async quickStartGateway(): Promise<void> {
+    this.log('⚡ Quick Gateway initialization...');
+    
+    // Quick check for existing Gateway (aggressive timeouts)
+    const existingPort = await this.quickCheckExistingGateway();
+    if (existingPort) {
+      this.currentPort = existingPort;
+      this.isReady = true;
+      this.log(`✅ Using existing Gateway on port ${existingPort}`);
+      return;
+    }
+    
+    // No existing Gateway - start new one in background
+    this.log('🚀 No existing Gateway found - starting new one in background...');
+    this.startGatewayAsync();
+  }
+  
+  // Start Gateway in background (non-blocking)
+  startGatewayAsync(): void {
+    if (this.backgroundStartupPromise) {
+      this.log('Background Gateway startup already in progress');
+      return;
+    }
+    
+    this.backgroundStartupPromise = this.startGatewayInternal().catch(error => {
+      this.log(`❌ Background Gateway startup failed: ${error.message}`);
+      throw error;
+    });
+  }
+  
+  // Ensure Gateway is ready (used by tool handlers)
+  async ensureGatewayReady(): Promise<void> {
+    if (this.isReady) {
+      return; // Already ready
+    }
+    
+    this.log('⏳ Tool called - ensuring Gateway is ready...');
+    
+    // First, try to find existing Gateway again (might have started since init)
+    const existingPort = await this.findExistingGateway();
+    if (existingPort) {
+      this.currentPort = existingPort;
+      this.isReady = true;
+      this.log(`✅ Found existing Gateway on port ${existingPort}`);
+      return;
+    }
+    
+    // Wait for background startup if it's running
+    if (this.backgroundStartupPromise) {
+      this.log('⏳ Waiting for background Gateway startup to complete...');
+      await this.backgroundStartupPromise;
+      return;
+    }
+    
+    // If no background startup, start synchronously
+    this.log('⏳ Starting Gateway synchronously...');
+    await this.startGatewayInternal();
+  }
+  
+  // Backwards compatibility - redirect to quickStartGateway
   async startGateway(): Promise<void> {
+    await this.quickStartGateway();
+  }
+
+  // Original startup logic (now internal)
+  private async startGatewayInternal(): Promise<void> {
     if (this.isStarting || this.isReady) {
       this.log('Gateway is already starting or ready');
       return;
@@ -497,16 +591,6 @@ export class IBGatewayManager {
       await this.logSystemResources();
       
       await this.ensureGatewayExists();
-      
-      // First, check if there's already a healthy Gateway running that we can reuse
-      const existingPort = await this.findExistingGateway();
-      if (existingPort) {
-        this.currentPort = existingPort;
-        this.isReady = true;
-        this.isStarting = false;
-        this.log(`🎯 Reusing existing Gateway on port ${existingPort} instead of starting new instance`);
-        return;
-      }
       
       // Check for zombie processes that might be blocking ports
       await this.killZombieGatewayProcesses();

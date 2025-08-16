@@ -33,8 +33,18 @@ export class ToolHandlers {
     this.context = context;
   }
 
+  // Ensure Gateway is ready before operations
+  private async ensureGatewayReady(): Promise<void> {
+    if (this.context.gatewayManager) {
+      await this.context.gatewayManager.ensureGatewayReady();
+    }
+  }
+
   // Authentication management
   private async ensureAuth(): Promise<void> {
+    // Ensure Gateway is ready first
+    await this.ensureGatewayReady();
+    
     // Check if already authenticated
     const isAuthenticated = await this.context.ibClient.checkAuthenticationStatus();
     if (isAuthenticated) {
@@ -117,6 +127,9 @@ export class ToolHandlers {
 
   async authenticate(input: AuthenticateInput): Promise<ToolHandlerResult> {
     try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
       const port = this.context.gatewayManager 
         ? this.context.gatewayManager.getCurrentPort() 
         : this.context.config.IB_GATEWAY_PORT;
@@ -258,6 +271,9 @@ export class ToolHandlers {
 
   async getAccountInfo(input: GetAccountInfoInput): Promise<ToolHandlerResult> {
     try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
       // Ensure authentication in headless mode
       if (this.context.config.IB_HEADLESS_MODE) {
         await this.ensureAuth();
@@ -286,6 +302,9 @@ export class ToolHandlers {
 
   async getPositions(input: GetPositionsInput): Promise<ToolHandlerResult> {
     try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
       // Ensure authentication in headless mode
       if (this.context.config.IB_HEADLESS_MODE) {
         await this.ensureAuth();
@@ -314,6 +333,9 @@ export class ToolHandlers {
 
   async getMarketData(input: GetMarketDataInput): Promise<ToolHandlerResult> {
     try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
       // Ensure authentication in headless mode
       if (this.context.config.IB_HEADLESS_MODE) {
         await this.ensureAuth();
@@ -342,6 +364,9 @@ export class ToolHandlers {
 
   async placeOrder(input: PlaceOrderInput): Promise<ToolHandlerResult> {
     try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
       // Ensure authentication in headless mode
       if (this.context.config.IB_HEADLESS_MODE) {
         await this.ensureAuth();
@@ -378,6 +403,9 @@ export class ToolHandlers {
 
   async getOrderStatus(input: GetOrderStatusInput): Promise<ToolHandlerResult> {
     try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
       // Ensure authentication in headless mode
       if (this.context.config.IB_HEADLESS_MODE) {
         await this.ensureAuth();

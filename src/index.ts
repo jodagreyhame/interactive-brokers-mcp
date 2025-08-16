@@ -80,23 +80,24 @@ export const configSchema = z.object({
 // Global gateway manager instance
 let gatewayManager: IBGatewayManager | null = null;
 
-// Initialize and start IB Gateway
+// Initialize and start IB Gateway (fast startup for MCP plugin compatibility)
 async function initializeGateway(ibClient?: IBClient) {
   if (!gatewayManager) {
     gatewayManager = new IBGatewayManager();
     
     try {
-      Logger.info('🚀 Starting Interactive Brokers Gateway...');
-      await gatewayManager.startGateway();
-      Logger.info('✅ IB Gateway started successfully');
+      Logger.info('⚡ Quick Gateway initialization for MCP plugin...');
+      await gatewayManager.quickStartGateway();
+      Logger.info('✅ Gateway initialization completed (background startup if needed)');
       
       // Update client port if provided
       if (ibClient) {
         ibClient.updatePort(gatewayManager.getCurrentPort());
       }
     } catch (error) {
-      Logger.error('❌ Failed to start IB Gateway:', error);
-      throw error;
+      Logger.error('❌ Failed to initialize Gateway:', error);
+      // Don't throw error during quick startup - tools will handle it
+      Logger.warn('⚠️ Gateway initialization failed, tools will attempt connection when called');
     }
   }
   return gatewayManager;

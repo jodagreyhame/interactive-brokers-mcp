@@ -27,7 +27,7 @@ export class HeadlessAuthenticator {
 
       // Launch browser in headless mode (puppeteer includes Chromium)
       this.browser = await puppeteer.launch({ 
-        headless: false,
+        headless: true,
         // Accept self-signed certificates
         args: [
           '--ignore-certificate-errors', 
