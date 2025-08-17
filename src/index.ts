@@ -6,6 +6,7 @@ import { IBGatewayManager } from "./gateway-manager.js";
 import { config } from "./config.js";
 import { registerTools } from "./tools.js";
 import { Logger } from "./logger.js";
+import { SecureTunnelManager } from "./secure-tunnel.js";
 
 // Parse command line arguments
 function parseArgs(): z.infer<typeof configSchema> {
@@ -132,12 +133,20 @@ async function initializeGateway(ibClient?: IBClient) {
   return gatewayManager;
 }
 
-// Cleanup function for gateway
-async function cleanupGateway(signal?: string) {
+// Cleanup function for gateway and tunnels
+async function cleanupAll(signal?: string) {
   if (signal) {
     Logger.info(`🛑 Received ${signal}, cleaning up...`);
   }
   
+  // Clean up secure tunnels first
+  try {
+    await SecureTunnelManager.cleanupAllTunnels();
+  } catch (error) {
+    Logger.error('Error cleaning up secure tunnels:', error);
+  }
+  
+  // Clean up gateway
   if (gatewayManager) {
     try {
       Logger.info('🛑 Shutting down IB Gateway...');
@@ -160,7 +169,7 @@ const gracefulShutdown = (signal: string) => {
   isShuttingDown = true;
   
   // Don't use async/await here to avoid potential hanging
-  cleanupGateway(signal).finally(() => {
+  cleanupAll(signal).finally(() => {
     process.exit(0);
   });
 };
@@ -174,14 +183,14 @@ process.on('exit', (code) => {
 // Handle uncaught exceptions gracefully
 process.on('uncaughtException', (error) => {
   Logger.error('🚨 Uncaught exception:', error);
-  cleanupGateway('UNCAUGHT_EXCEPTION').finally(() => {
+  cleanupAll('UNCAUGHT_EXCEPTION').finally(() => {
     process.exit(1);
   });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   Logger.error('🚨 Unhandled rejection at:', promise, 'reason:', reason);
-  cleanupGateway('UNHANDLED_REJECTION').finally(() => {
+  cleanupAll('UNHANDLED_REJECTION').finally(() => {
     process.exit(1);
   });
 });
