@@ -68,9 +68,9 @@ export class IBGatewayManager {
 
     this.cleanupHandlersRegistered = true;
 
-    // Handle graceful shutdown signals
+    // Handle graceful shutdown signals - only clean temp files, don't kill gateway
     const cleanup = async (signal: string) => {
-      this.log(`🛑 Received ${signal}, cleaning up...`);
+      this.log(`🛑 Received ${signal}, cleaning up temp files only...`);
       await this.cleanup();
       process.exit(0);
     };
@@ -93,15 +93,18 @@ export class IBGatewayManager {
       process.exit(1);
     });
 
-    // Handle normal process exit
+    // Handle normal process exit - only clean temp files
     process.on('exit', (code) => {
-      this.log(`🛑 Process exiting with code ${code}, ensuring cleanup...`);
-      this.forceKillGateway();
+      this.log(`🛑 Process exiting with code ${code}, cleaning temp files only...`);
+      // Don't kill gateway - just clean references
+      this.gatewayProcess = null;
+      this.isReady = false;
+      this.isStarting = false;
     });
 
     // Handle when parent process dies (useful for child processes)
     process.on('disconnect', async () => {
-      this.log('🛑 Parent process disconnected, cleaning up...');
+      this.log('🛑 Parent process disconnected, cleaning up temp files only...');
       await this.cleanup();
       process.exit(0);
     });
@@ -109,35 +112,26 @@ export class IBGatewayManager {
 
   private async cleanup(): Promise<void> {
     try {
-      if (this.gatewayProcess) {
-        this.log('🧹 Cleaning up gateway process...');
-        await this.stopGateway();
-      }
-      
-      // Clean up temporary config files
+      // Only clean up temporary config files - don't kill gateway
+      this.log('🧹 Cleaning up temporary files only...');
       await ConfigUtils.cleanupTempConfigFiles(this.gatewayDir);
+      
+      // Just clear references without killing the process
+      this.gatewayProcess = null;
+      this.isReady = false;
+      this.isStarting = false;
     } catch (error) {
       Logger.error('❌ Error during cleanup:', error);
-      // Force kill as fallback
-      this.forceKillGateway();
-    }
-  }
-
-
-
-  private forceKillGateway(): void {
-    if (this.gatewayProcess && !this.gatewayProcess.killed) {
-      this.log('🔨 Force killing gateway process...');
-      try {
-        this.gatewayProcess.kill('SIGKILL');
-      } catch (error) {
-        Logger.error('❌ Error force killing gateway:', error);
-      }
+      // Still don't kill gateway - just clear references
       this.gatewayProcess = null;
       this.isReady = false;
       this.isStarting = false;
     }
   }
+
+
+
+  // Removed forceKillGateway - we never kill gateway processes anymore
 
   private getJavaPath(): string {
     const platform = `${process.platform}-${process.arch}`;
@@ -431,56 +425,14 @@ export class IBGatewayManager {
   }
 
   async stopGateway(): Promise<void> {
-    if (!this.gatewayProcess) {
-      return;
-    }
-
-    this.log('🛑 Stopping IB Gateway...');
+    // Don't actually stop the gateway - just disconnect from it
+    this.log('🔗 Disconnecting from IB Gateway (leaving it running)...');
     
-    return new Promise<void>((resolve) => {
-      const process = this.gatewayProcess!;
-      let resolved = false;
-
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          this.gatewayProcess = null;
-          this.isReady = false;
-          this.isStarting = false;
-          this.log('✅ IB Gateway stopped');
-          resolve();
-        }
-      };
-
-      // Listen for process exit
-      process.once('exit', cleanup);
-      process.once('close', cleanup);
-
-      // Try graceful shutdown first
-      try {
-        process.kill('SIGTERM');
-      } catch (error) {
-        this.log(`⚠️ Error sending SIGTERM: ${error}`);
-      }
-      
-      // Set up force kill timeout
-      const forceKillTimeout = setTimeout(() => {
-        if (process && !process.killed) {
-          this.log('🔨 Force killing IB Gateway...');
-          try {
-            process.kill('SIGKILL');
-          } catch (error) {
-            this.log(`⚠️ Error force killing: ${error}`);
-          }
-        }
-        cleanup();
-      }, 5000); // Increased timeout to 5 seconds
-
-      // Clean up timeout if process exits gracefully
-      process.once('exit', () => {
-        clearTimeout(forceKillTimeout);
-      });
-    });
+    this.gatewayProcess = null;
+    this.isReady = false;
+    this.isStarting = false;
+    
+    this.log('✅ Disconnected from IB Gateway');
   }
 
   isGatewayReady(): boolean {

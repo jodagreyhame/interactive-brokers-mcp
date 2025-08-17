@@ -125,22 +125,20 @@ async function initializeGateway(ibClient?: IBClient) {
   return gatewayManager;
 }
 
-// Cleanup function for gateway and tunnels
+// Cleanup function - only cleanup temp files, not gateway
 async function cleanupAll(signal?: string) {
   if (signal) {
-    Logger.info(`🛑 Received ${signal}, cleaning up...`);
+    Logger.info(`🛑 Received ${signal}, cleaning up temp files only...`);
   }
   
-
-  
-  // Clean up gateway
+  // Only cleanup temp files - don't shutdown gateway (leave it running for next npx process)
   if (gatewayManager) {
     try {
-      Logger.info('🛑 Shutting down IB Gateway...');
-      await gatewayManager.stopGateway();
-      Logger.info('✅ IB Gateway shutdown complete');
+      Logger.info('🔗 Disconnecting from IB Gateway (leaving it running)...');
+      await gatewayManager.stopGateway(); // This now just disconnects, doesn't kill
+      Logger.info('✅ Disconnected from IB Gateway');
     } catch (error) {
-      Logger.error('Error stopping gateway:', error);
+      Logger.error('Error disconnecting from gateway:', error);
     }
     gatewayManager = null;
   }
