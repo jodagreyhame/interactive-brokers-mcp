@@ -14,6 +14,9 @@ export const config = {
   IB_PASSWORD_AUTH: process.env.IB_PASSWORD_AUTH || process.env.IB_PASSWORD || "",
   IB_AUTH_TIMEOUT: parseInt(process.env.IB_AUTH_TIMEOUT || "60000"),
   IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === "true",
+  
+  // Browser installation configuration
+  IB_AUTO_INSTALL_BROWSER: process.env.IB_AUTO_INSTALL_BROWSER === "true",
 };
 
 

@@ -1,6 +1,8 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import { chromium, Browser, Page } from 'playwright-core';
 import { Logger } from './logger.js';
 import { IBClient } from './ib-client.js';
+import { BrowserInstaller } from './browser-installer.js';
+import { config } from './config.js';
 
 export interface HeadlessAuthConfig {
   url: string;
@@ -21,32 +23,38 @@ export class HeadlessAuthenticator {
   private browser: Browser | null = null;
   private page: Page | null = null;
 
-  async authenticate(config: HeadlessAuthConfig): Promise<HeadlessAuthResult> {
+  async authenticate(authConfig: HeadlessAuthConfig): Promise<HeadlessAuthResult> {
     try {
       Logger.info('🔐 Starting headless authentication...');
-
-      // Launch browser in headless mode (puppeteer includes Chromium)
-      this.browser = await puppeteer.launch({ 
+      
+      // Ensure we have a browser available for authentication
+      Logger.info('🌐 Setting up browser for authentication...');
+      
+      const chromiumPath = await BrowserInstaller.installChromiumIfNeeded(config.IB_AUTO_INSTALL_BROWSER);
+      
+      if (!chromiumPath) {
+        return {
+          success: false,
+          message: 'Browser not available for authentication',
+          error: 'No Chromium executable found and auto-install is disabled. Set IB_AUTO_INSTALL_BROWSER=true to enable auto-installation.'
+        };
+      }
+      
+      // Launch browser with detected/installed Chromium
+      this.browser = await chromium.launch({
+        executablePath: chromiumPath,
         headless: true,
-        // Accept self-signed certificates and basic sandboxing for containers
-        args: [
-          '--ignore-certificate-errors', 
-          '--ignore-ssl-errors', 
-          '--disable-web-security',
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage'
-        ]
+        args: BrowserInstaller.getChromiumLaunchArgs()
       });
 
       this.page = await this.browser.newPage();
       
       // Set a longer timeout for navigation - several minutes for full auth process
-      this.page.setDefaultTimeout(config.timeout || 300000); // 5 minutes default
+      this.page.setDefaultTimeout(authConfig.timeout || 300000); // 5 minutes default
 
       // Navigate to IB Gateway login page
-      Logger.info(`🌐 Navigating to ${config.url}...`);
-      await this.page.goto(config.url, { waitUntil: 'networkidle2' });
+      Logger.info(`🌐 Navigating to ${authConfig.url}...`);
+      await this.page.goto(authConfig.url, { waitUntil: 'networkidle' });
 
       // Wait for login form to be visible
       Logger.info('⏳ Waiting for login form...');
@@ -54,12 +62,12 @@ export class HeadlessAuthenticator {
 
       // Find and fill username field
       const usernameSelector = 'input[name="user"], input[id="user"], input[type="text"]';
-      await this.page.type(usernameSelector, config.username);
+      await this.page.fill(usernameSelector, authConfig.username);
       Logger.info('✅ Username filled');
 
       // Find and fill password field
       const passwordSelector = 'input[name="password"], input[id="password"], input[type="password"]';
-      await this.page.type(passwordSelector, config.password);
+      await this.page.fill(passwordSelector, authConfig.password);
       Logger.info('✅ Password filled');
 
       // Look for submit button and click it
@@ -71,16 +79,16 @@ export class HeadlessAuthenticator {
       // Wait for the authentication process to complete using IB client polling
       Logger.info('⏳ Waiting for authentication to complete...');
       
-      const maxWaitTime = config.timeout || 300000; // 5 minutes default
+      const maxWaitTime = authConfig.timeout || 300000; // 5 minutes default
       const startTime = Date.now();
       
       while (Date.now() - startTime < maxWaitTime) {
         await new Promise(resolve => setTimeout(resolve, 3000)); // Check every 3 seconds
         
         // Use IB Client to check authentication status if available
-        if (config.ibClient) {
+        if (authConfig.ibClient) {
           try {
-            const isAuthenticated = await config.ibClient.checkAuthenticationStatus();
+            const isAuthenticated = await authConfig.ibClient.checkAuthenticationStatus();
             if (isAuthenticated) {
               Logger.info('🎉 Authentication completed! IB Client confirmed authentication.');
               await this.cleanup();
