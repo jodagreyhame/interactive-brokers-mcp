@@ -13,7 +13,7 @@ export class BrowserInstaller {
   static async connectToRemoteBrowser(endpoint: string): Promise<Browser> {
     Logger.info(`🌐 Connecting to remote browser at ${endpoint}...`);
     try {
-      const browser = await chromium.connect(endpoint);
+      const browser = await chromium.connectOverCDP(endpoint);
       Logger.info('✅ Successfully connected to remote browser');
       return browser;
     } catch (error) {
