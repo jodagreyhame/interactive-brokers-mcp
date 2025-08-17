@@ -23,15 +23,30 @@ export class BrowserInstaller {
   }
 
   /**
-   * Launch a local browser using Playwright's default behavior
+   * Launch a local browser using Playwright's default behavior or system Chromium
    */
   static async launchLocalBrowser(): Promise<Browser> {
     Logger.info('🔧 Starting local browser with Playwright...');
     try {
-      const browser = await chromium.launch({
+      // Check for system Chromium executable path from environment
+      const systemChromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 
+                                 process.env.CHROMIUM_PATH ||
+                                 process.env.GOOGLE_CHROME_BIN;
+
+      const launchOptions: any = {
         headless: true,
         args: this.getChromiumLaunchArgs()
-      });
+      };
+
+      // If we have a system Chromium path, use it
+      if (systemChromiumPath) {
+        Logger.info(`🎯 Using system Chromium at: ${systemChromiumPath}`);
+        launchOptions.executablePath = systemChromiumPath;
+      } else {
+        Logger.info('🔧 Using Playwright\'s default Chromium');
+      }
+
+      const browser = await chromium.launch(launchOptions);
       Logger.info('✅ Local browser started successfully');
       return browser;
     } catch (error) {
@@ -42,7 +57,8 @@ export class BrowserInstaller {
       const suggestions = [
         '- Use a remote browser: set IB_BROWSER_ENDPOINT=ws://browser:3000',
         '- Use a browser service: set IB_BROWSER_ENDPOINT=wss://chrome.browserless.io?token=YOUR_TOKEN',
-        '- Install Chromium locally and let Playwright find it',
+        '- Install Chromium locally: apk add chromium',
+        '- Set system Chromium path: PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser',
         '- Disable headless mode: set IB_HEADLESS_MODE=false'
       ];
       
