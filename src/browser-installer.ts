@@ -2,6 +2,11 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { Logger } from './logger.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class BrowserInstaller {
   private static readonly CHROMIUM_PATHS = [
