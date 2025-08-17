@@ -2,7 +2,6 @@ import { chromium, Browser, Page } from 'playwright-core';
 import { Logger } from './logger.js';
 import { IBClient } from './ib-client.js';
 import { BrowserInstaller } from './browser-installer.js';
-import { config } from './config.js';
 
 export interface HeadlessAuthConfig {
   url: string;
@@ -10,6 +9,7 @@ export interface HeadlessAuthConfig {
   password: string;
   timeout?: number;
   ibClient?: IBClient;
+  autoInstallBrowser?: boolean;
 }
 
 export interface HeadlessAuthResult {
@@ -30,7 +30,7 @@ export class HeadlessAuthenticator {
       // Ensure we have a browser available for authentication
       Logger.info('🌐 Setting up browser for authentication...');
       
-      const chromiumPath = await BrowserInstaller.installChromiumIfNeeded(config.IB_AUTO_INSTALL_BROWSER);
+      const chromiumPath = await BrowserInstaller.installChromiumIfNeeded(authConfig.autoInstallBrowser ?? false);
       
       if (!chromiumPath) {
         return {

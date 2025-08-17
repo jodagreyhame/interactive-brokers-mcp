@@ -1,6 +1,5 @@
 import { IBClient } from "./ib-client.js";
 import { IBGatewayManager } from "./gateway-manager.js";
-import { config } from "./config.js";
 import { HeadlessAuthenticator, HeadlessAuthConfig } from "./headless-auth.js";
 import open from "open";
 import { Logger } from "./logger.js";
@@ -69,6 +68,7 @@ export class ToolHandlers {
         password: this.context.config.IB_PASSWORD_AUTH,
         timeout: this.context.config.IB_AUTH_TIMEOUT,
         ibClient: this.context.ibClient, // Pass the IB client for authentication checking
+        autoInstallBrowser: this.context.config.IB_AUTO_INSTALL_BROWSER,
       };
 
       const authenticator = new HeadlessAuthenticator();
@@ -144,6 +144,7 @@ export class ToolHandlers {
             username: this.context.config.IB_USERNAME,
             password: this.context.config.IB_PASSWORD_AUTH,
             timeout: this.context.config.IB_AUTH_TIMEOUT,
+            autoInstallBrowser: this.context.config.IB_AUTO_INSTALL_BROWSER,
           };
 
           // Validate that we have credentials for headless mode
