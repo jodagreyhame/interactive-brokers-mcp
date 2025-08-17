@@ -27,12 +27,21 @@ export class HeadlessAuthenticator {
     try {
       Logger.info('🔐 Starting headless authentication...');
       
+      // Log the full auth config for debugging (excluding sensitive data)
+      const logConfig = { ...authConfig };
+      if (logConfig.password) logConfig.password = '[REDACTED]';
+      Logger.info(`🔍 Authentication config: ${JSON.stringify(logConfig, null, 2)}`);
+      
       // Setup browser - remote if endpoint provided, otherwise local
+      Logger.info(`🔍 Browser endpoint check: ${authConfig.browserEndpoint ? `"${authConfig.browserEndpoint}"` : 'undefined/empty'}`);
+      
       if (authConfig.browserEndpoint) {
         // Use remote browser
+        Logger.info(`🌐 Using remote browser at: ${authConfig.browserEndpoint}`);
         this.browser = await BrowserInstaller.connectToRemoteBrowser(authConfig.browserEndpoint);
       } else {
         // Use local browser - let Playwright handle everything
+        Logger.info('🔧 Using local browser (Playwright default)');
         this.browser = await BrowserInstaller.launchLocalBrowser();
       }
 

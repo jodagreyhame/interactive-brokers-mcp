@@ -12,6 +12,9 @@ function parseArgs(): z.infer<typeof configSchema> {
   const args: any = {};
   const argv = process.argv.slice(2);
   
+  // Log raw arguments for debugging
+  Logger.info(`🔍 Raw command line arguments: ${JSON.stringify(argv)}`);
+  
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     
@@ -19,31 +22,39 @@ function parseArgs(): z.infer<typeof configSchema> {
       const key = arg.slice(2);
       const nextArg = argv[i + 1];
       
+      Logger.debug(`🔍 Processing flag: ${key}, nextArg: ${nextArg}`);
+      
       switch (key) {
         case 'ib-username':
           args.IB_USERNAME = nextArg;
+          Logger.debug(`🔍 Set IB_USERNAME to: ${nextArg}`);
           i++;
           break;
         case 'ib-password':
         case 'ib-password-auth':
           args.IB_PASSWORD_AUTH = nextArg;
+          Logger.debug(`🔍 Set IB_PASSWORD_AUTH to: [REDACTED]`);
           i++;
           break;
         case 'ib-auth-timeout':
           args.IB_AUTH_TIMEOUT = parseInt(nextArg);
+          Logger.debug(`🔍 Set IB_AUTH_TIMEOUT to: ${nextArg}`);
           i++;
           break;
         case 'ib-headless-mode':
           // Support both --ib-headless-mode (boolean flag) and --ib-headless-mode=true/false
           if (nextArg && !nextArg.startsWith('--')) {
             args.IB_HEADLESS_MODE = nextArg.toLowerCase() === 'true';
+            Logger.debug(`🔍 Set IB_HEADLESS_MODE to: ${nextArg.toLowerCase() === 'true'} (from arg: ${nextArg})`);
             i++;
           } else {
             args.IB_HEADLESS_MODE = true;
+            Logger.debug(`🔍 Set IB_HEADLESS_MODE to: true (flag only)`);
           }
           break;
         case 'ib-browser-endpoint':
           args.IB_BROWSER_ENDPOINT = nextArg;
+          Logger.debug(`🔍 Set IB_BROWSER_ENDPOINT to: ${nextArg}`);
           i++;
           break;
       }
@@ -51,27 +62,35 @@ function parseArgs(): z.infer<typeof configSchema> {
       const [key, value] = arg.split('=', 2);
       const cleanKey = key.startsWith('--') ? key.slice(2) : key;
       
+      Logger.debug(`🔍 Processing key=value: ${cleanKey}=${value}`);
+      
       switch (cleanKey) {
         case 'ib-username':
           args.IB_USERNAME = value;
+          Logger.debug(`🔍 Set IB_USERNAME to: ${value}`);
           break;
         case 'ib-password':
         case 'ib-password-auth':
           args.IB_PASSWORD_AUTH = value;
+          Logger.debug(`🔍 Set IB_PASSWORD_AUTH to: [REDACTED]`);
           break;
         case 'ib-auth-timeout':
           args.IB_AUTH_TIMEOUT = parseInt(value);
+          Logger.debug(`🔍 Set IB_AUTH_TIMEOUT to: ${value}`);
           break;
         case 'ib-headless-mode':
           args.IB_HEADLESS_MODE = value.toLowerCase() === 'true';
+          Logger.debug(`🔍 Set IB_HEADLESS_MODE to: ${value.toLowerCase() === 'true'} (from value: ${value})`);
           break;
         case 'ib-browser-endpoint':
           args.IB_BROWSER_ENDPOINT = value;
+          Logger.debug(`🔍 Set IB_BROWSER_ENDPOINT to: ${value}`);
           break;
       }
     }
   }
   
+  Logger.info(`🔍 Parsed args: ${JSON.stringify(args, null, 2)}`);
   return args;
 }
 
@@ -182,6 +201,12 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
     ...userConfig
   };
 
+  // Log the merged config for debugging (but redact sensitive info)
+  const logConfig = { ...mergedConfig };
+  if (logConfig.IB_PASSWORD_AUTH) logConfig.IB_PASSWORD_AUTH = '[REDACTED]';
+  if (logConfig.IB_PASSWORD) logConfig.IB_PASSWORD = '[REDACTED]';
+  Logger.info(`🔍 Final merged config: ${JSON.stringify(logConfig, null, 2)}`);
+
   // Create IB Client with default port initially - this will be updated once gateway starts
   const ibClient = new IBClient({
     host: mergedConfig.IB_GATEWAY_HOST,
@@ -244,11 +269,21 @@ if (isMainModule) {
     IB_BROWSER_ENDPOINT: process.env.IB_BROWSER_ENDPOINT,
   };
   
+  // Log environment config for debugging
+  const logEnvConfig = { ...envConfig };
+  if (logEnvConfig.IB_PASSWORD_AUTH) logEnvConfig.IB_PASSWORD_AUTH = '[REDACTED]';
+  Logger.info(`🔍 Environment config: ${JSON.stringify(logEnvConfig, null, 2)}`);
+  
   // Merge configs with priority: args > env > defaults
   const finalConfig = {
     ...envConfig,
     ...argsConfig,
   };
+  
+  // Log final config before cleanup
+  const logFinalConfig = { ...finalConfig };
+  if (logFinalConfig.IB_PASSWORD_AUTH) logFinalConfig.IB_PASSWORD_AUTH = '[REDACTED]';
+  Logger.info(`🔍 Final config before cleanup: ${JSON.stringify(logFinalConfig, null, 2)}`);
   
   // Remove undefined values
   Object.keys(finalConfig).forEach(key => {
@@ -256,6 +291,11 @@ if (isMainModule) {
       delete finalConfig[key as keyof typeof finalConfig];
     }
   });
+  
+  // Log final config after cleanup
+  const logFinalConfigAfter = { ...finalConfig };
+  if (logFinalConfigAfter.IB_PASSWORD_AUTH) logFinalConfigAfter.IB_PASSWORD_AUTH = '[REDACTED]';
+  Logger.info(`🔍 Final config after cleanup: ${JSON.stringify(logFinalConfigAfter, null, 2)}`);
   
   const stdioTransport = new StdioServerTransport();
   const server = IBMCP({config: finalConfig})
