@@ -6,7 +6,7 @@ import { IBGatewayManager } from "./gateway-manager.js";
 import { config } from "./config.js";
 import { registerTools } from "./tools.js";
 import { Logger } from "./logger.js";
-import { SecureTunnelManager } from "./secure-tunnel.js";
+
 
 // Parse command line arguments
 function parseArgs(): z.infer<typeof configSchema> {
@@ -53,11 +53,7 @@ function parseArgs(): z.infer<typeof configSchema> {
             Logger.debug(`🔍 Set IB_HEADLESS_MODE to: true (flag only)`);
           }
           break;
-        case 'ib-browser-endpoint':
-          args.IB_BROWSER_ENDPOINT = nextArg;
-          Logger.debug(`🔍 Set IB_BROWSER_ENDPOINT to: ${nextArg}`);
-          i++;
-          break;
+
       }
     } else if (arg.includes('=')) {
       const [key, value] = arg.split('=', 2);
@@ -83,10 +79,7 @@ function parseArgs(): z.infer<typeof configSchema> {
           args.IB_HEADLESS_MODE = value.toLowerCase() === 'true';
           Logger.debug(`🔍 Set IB_HEADLESS_MODE to: ${value.toLowerCase() === 'true'} (from value: ${value})`);
           break;
-        case 'ib-browser-endpoint':
-          args.IB_BROWSER_ENDPOINT = value;
-          Logger.debug(`🔍 Set IB_BROWSER_ENDPOINT to: ${value}`);
-          break;
+
       }
     }
   }
@@ -103,8 +96,7 @@ export const configSchema = z.object({
   IB_AUTH_TIMEOUT: z.number().optional(),
   IB_HEADLESS_MODE: z.boolean().optional(),
   
-  // Browser configuration
-  IB_BROWSER_ENDPOINT: z.string().optional(),
+
 });
 
 // Global gateway manager instance
@@ -139,12 +131,7 @@ async function cleanupAll(signal?: string) {
     Logger.info(`🛑 Received ${signal}, cleaning up...`);
   }
   
-  // Clean up secure tunnels first
-  try {
-    await SecureTunnelManager.cleanupAllTunnels();
-  } catch (error) {
-    Logger.error('Error cleaning up secure tunnels:', error);
-  }
+
   
   // Clean up gateway
   if (gatewayManager) {
@@ -275,7 +262,7 @@ if (isMainModule) {
     IB_PASSWORD_AUTH: process.env.IB_PASSWORD_AUTH || process.env.IB_PASSWORD,
     IB_AUTH_TIMEOUT: process.env.IB_AUTH_TIMEOUT ? parseInt(process.env.IB_AUTH_TIMEOUT) : undefined,
     IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === 'true',
-    IB_BROWSER_ENDPOINT: process.env.IB_BROWSER_ENDPOINT,
+
   };
   
   // Log environment config for debugging

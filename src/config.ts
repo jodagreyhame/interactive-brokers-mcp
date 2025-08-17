@@ -15,6 +15,5 @@ export const config = {
   IB_AUTH_TIMEOUT: parseInt(process.env.IB_AUTH_TIMEOUT || "60000"),
   IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === "true",
   
-  // Browser configuration
-  IB_BROWSER_ENDPOINT: process.env.IB_BROWSER_ENDPOINT || "", // e.g., "ws://browser:3000" or "wss://chrome.browserless.io"
+
 };

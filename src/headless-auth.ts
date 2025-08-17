@@ -2,7 +2,6 @@ import { chromium, Browser, Page } from 'playwright-core';
 import { Logger } from './logger.js';
 import { IBClient } from './ib-client.js';
 import { BrowserInstaller } from './browser-installer.js';
-import { SecureTunnelManager } from './secure-tunnel.js';
 
 export interface HeadlessAuthConfig {
   url: string;
@@ -10,7 +9,6 @@ export interface HeadlessAuthConfig {
   password: string;
   timeout?: number;
   ibClient?: IBClient;
-  browserEndpoint?: string; // Remote browser URL if provided
 }
 
 export interface HeadlessAuthResult {
@@ -23,7 +21,6 @@ export interface HeadlessAuthResult {
 export class HeadlessAuthenticator {
   private browser: Browser | null = null;
   private page: Page | null = null;
-  private activeTunnel: any = null;
 
   async authenticate(authConfig: HeadlessAuthConfig): Promise<HeadlessAuthResult> {
     try {
@@ -34,55 +31,18 @@ export class HeadlessAuthenticator {
       if (logConfig.password) logConfig.password = '[REDACTED]';
       Logger.info(`🔍 Authentication config: ${JSON.stringify(logConfig, null, 2)}`);
       
-      // Setup browser - remote if endpoint provided, otherwise local
-      Logger.info(`🔍 Browser endpoint check: ${authConfig.browserEndpoint ? `"${authConfig.browserEndpoint}"` : 'undefined/empty'}`);
-      
-      let finalAuthUrl = authConfig.url;
-      
-      if (authConfig.browserEndpoint) {
-        // Use remote browser - need to create secure tunnel for localhost URLs
-        Logger.info(`🌐 Using remote browser at: ${authConfig.browserEndpoint}`);
-        
-        // Check if we need to create a secure tunnel for localhost
-        if (this.isLocalUrl(authConfig.url)) {
-          Logger.info('🔒 Remote browser with localhost URL detected - creating secure tunnel...');
-          try {
-            this.activeTunnel = await SecureTunnelManager.createSecureAuthTunnel(authConfig.url, 15);
-            finalAuthUrl = this.activeTunnel.url;
-            Logger.info(`🔒 ✅ Using secure tunnel: ${finalAuthUrl}`);
-            Logger.info(`🔒 🔑 Tunnel auth: ${this.activeTunnel.auth}`);
-          } catch (tunnelError) {
-            Logger.error('🔒 ❌ Failed to create secure tunnel:', tunnelError);
-            throw new Error(`Failed to create secure tunnel for remote browser: ${tunnelError}`);
-          }
-        } else {
-          Logger.info('🌐 Remote browser with public URL - no tunnel needed');
-        }
-        
-        this.browser = await BrowserInstaller.connectToRemoteBrowser(authConfig.browserEndpoint);
-      } else {
-        // Use local browser - let Playwright handle everything
-        Logger.info('🔧 Using local browser (Playwright default)');
-        this.browser = await BrowserInstaller.launchLocalBrowser();
-      }
+      // Use local browser - let Playwright handle everything
+      Logger.info('🔧 Using local browser (Playwright default)');
+      this.browser = await BrowserInstaller.launchLocalBrowser();
 
       this.page = await this.browser.newPage();
-      
-      // If we have a tunnel with auth, we need to set up basic auth
-      if (this.activeTunnel) {
-        Logger.info('🔒 Setting up basic authentication for secure tunnel...');
-        const [username, password] = this.activeTunnel.auth.split(':');
-        await this.page.setExtraHTTPHeaders({
-          'Authorization': `Basic ${Buffer.from(this.activeTunnel.auth).toString('base64')}`
-        });
-      }
       
       // Set a longer timeout for navigation - several minutes for full auth process
       this.page.setDefaultTimeout(authConfig.timeout || 300000); // 5 minutes default
 
-      // Navigate to IB Gateway login page (using tunnel URL if created)
-      Logger.info(`🌐 Navigating to ${finalAuthUrl}...`);
-      await this.page.goto(finalAuthUrl, { waitUntil: 'networkidle' });
+      // Navigate to IB Gateway login page
+      Logger.info(`🌐 Navigating to ${authConfig.url}...`);
+      await this.page.goto(authConfig.url, { waitUntil: 'networkidle' });
 
       // Wait for login form to be visible
       Logger.info('⏳ Waiting for login form...');
@@ -198,19 +158,7 @@ export class HeadlessAuthenticator {
     }
   }
 
-  /**
-   * Check if a URL is a localhost URL
-   */
-  private isLocalUrl(url: string): boolean {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.hostname === 'localhost' || 
-             urlObj.hostname === '127.0.0.1' || 
-             urlObj.hostname === '0.0.0.0';
-    } catch {
-      return false;
-    }
-  }
+
 
   async waitForAuthentication(maxWaitTime: number = 300000, ibClient?: IBClient): Promise<HeadlessAuthResult> {
     if (!this.page) {
@@ -304,12 +252,6 @@ export class HeadlessAuthenticator {
       if (this.browser) {
         await this.browser.close();
         this.browser = null;
-      }
-      // Clean up tunnel if created
-      if (this.activeTunnel) {
-        Logger.info('🔒 Cleaning up secure tunnel...');
-        await this.activeTunnel.cleanup();
-        this.activeTunnel = null;
       }
     } catch (error) {
       Logger.error('⚠️ Error during cleanup:', error);

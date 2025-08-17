@@ -1,27 +1,7 @@
 import { chromium, Browser } from 'playwright-core';
 import { Logger } from './logger.js';
 
-export interface BrowserConnectionResult {
-  browser: Browser;
-  isRemote: boolean;
-}
-
 export class BrowserInstaller {
-  /**
-   * Connect to a remote browser if endpoint is provided
-   */
-  static async connectToRemoteBrowser(endpoint: string): Promise<Browser> {
-    Logger.info(`🌐 Connecting to remote browser at ${endpoint}...`);
-    try {
-      const browser = await chromium.connectOverCDP(endpoint);
-      Logger.info('✅ Successfully connected to remote browser');
-      return browser;
-    } catch (error) {
-      Logger.error(`❌ Failed to connect to remote browser: ${error}`);
-      throw new Error(`Remote browser connection failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
   /**
    * Launch a local browser using Playwright's default behavior or system Chromium
    */
@@ -55,8 +35,6 @@ export class BrowserInstaller {
       // Provide helpful error message
       const errorMessage = error instanceof Error ? error.message : String(error);
       const suggestions = [
-        '- Use a remote browser: set IB_BROWSER_ENDPOINT=ws://browser:3000',
-        '- Use a browser service: set IB_BROWSER_ENDPOINT=wss://chrome.browserless.io?token=YOUR_TOKEN',
         '- Install Chromium locally: apk add chromium',
         '- Set system Chromium path: PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser',
         '- Disable headless mode: set IB_HEADLESS_MODE=false'
