@@ -42,14 +42,9 @@ function parseArgs(): z.infer<typeof configSchema> {
             args.IB_HEADLESS_MODE = true;
           }
           break;
-        case 'ib-auto-install-browser':
-          // Support both --ib-auto-install-browser (boolean flag) and --ib-auto-install-browser=true/false
-          if (nextArg && !nextArg.startsWith('--')) {
-            args.IB_AUTO_INSTALL_BROWSER = nextArg.toLowerCase() === 'true';
-            i++;
-          } else {
-            args.IB_AUTO_INSTALL_BROWSER = true;
-          }
+        case 'ib-browser-endpoint':
+          args.IB_BROWSER_ENDPOINT = nextArg;
+          i++;
           break;
       }
     } else if (arg.includes('=')) {
@@ -70,8 +65,8 @@ function parseArgs(): z.infer<typeof configSchema> {
         case 'ib-headless-mode':
           args.IB_HEADLESS_MODE = value.toLowerCase() === 'true';
           break;
-        case 'ib-auto-install-browser':
-          args.IB_AUTO_INSTALL_BROWSER = value.toLowerCase() === 'true';
+        case 'ib-browser-endpoint':
+          args.IB_BROWSER_ENDPOINT = value;
           break;
       }
     }
@@ -87,7 +82,9 @@ export const configSchema = z.object({
   IB_PASSWORD_AUTH: z.string().optional(),
   IB_AUTH_TIMEOUT: z.number().optional(),
   IB_HEADLESS_MODE: z.boolean().optional(),
-  IB_AUTO_INSTALL_BROWSER: z.boolean().optional(),
+  
+  // Browser configuration
+  IB_BROWSER_ENDPOINT: z.string().optional(),
 });
 
 // Global gateway manager instance
@@ -244,7 +241,7 @@ if (isMainModule) {
     IB_PASSWORD_AUTH: process.env.IB_PASSWORD_AUTH || process.env.IB_PASSWORD,
     IB_AUTH_TIMEOUT: process.env.IB_AUTH_TIMEOUT ? parseInt(process.env.IB_AUTH_TIMEOUT) : undefined,
     IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === 'true',
-    IB_AUTO_INSTALL_BROWSER: process.env.IB_AUTO_INSTALL_BROWSER === 'true',
+    IB_BROWSER_ENDPOINT: process.env.IB_BROWSER_ENDPOINT,
   };
   
   // Merge configs with priority: args > env > defaults
@@ -266,4 +263,3 @@ if (isMainModule) {
 }
 
 export default IBMCP;
-

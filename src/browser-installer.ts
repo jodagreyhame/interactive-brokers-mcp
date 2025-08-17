@@ -1,101 +1,53 @@
-import { execSync } from 'child_process';
-import { existsSync } from 'fs';
+import { chromium, Browser } from 'playwright-core';
 import { Logger } from './logger.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// ESM equivalent of __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+export interface BrowserConnectionResult {
+  browser: Browser;
+  isRemote: boolean;
+}
 
 export class BrowserInstaller {
-  private static readonly CHROMIUM_PATHS = [
-    '/usr/bin/chromium-browser',  // Alpine
-    '/usr/bin/chromium',          // Debian/Ubuntu
-    '/usr/bin/google-chrome',     // Chrome
-    '/usr/bin/google-chrome-stable',
-    '/opt/google/chrome/chrome',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // macOS
-  ];
-
-  static detectChromiumPath(): string | null {
-    Logger.debug('🔍 Detecting Chromium executable...');
-    
-    for (const path of this.CHROMIUM_PATHS) {
-      if (existsSync(path)) {
-        Logger.info(`✅ Found Chromium at: ${path}`);
-        return path;
-      }
-    }
-    
-    Logger.warn('❌ No Chromium executable found in standard locations');
-    return null;
-  }
-
-  static async installChromiumIfNeeded(autoInstall: boolean = false): Promise<string | null> {
-    // If auto-install is enabled, we take over browser management from playwright
-    if (autoInstall) {
-      process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = '1';
-      Logger.debug('🎯 Auto-install enabled: setting PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1');
-    }
-
-    const existingPath = this.detectChromiumPath();
-    if (existingPath) {
-      return existingPath;
-    }
-
-    if (!autoInstall) {
-      Logger.warn('🚫 Chromium not found and auto-install disabled');
-      Logger.info('💡 Either install Chromium manually or set IB_AUTO_INSTALL_BROWSER=true');
-      return null;
-    }
-
-    Logger.info('🔧 Chromium not found, attempting auto-installation...');
-    
+  /**
+   * Connect to a remote browser if endpoint is provided
+   */
+  static async connectToRemoteBrowser(endpoint: string): Promise<Browser> {
+    Logger.info(`🌐 Connecting to remote browser at ${endpoint}...`);
     try {
-      // Check if we're on Alpine
-      if (existsSync('/etc/alpine-release')) {
-        await this.installChromiumAlpine();
-        return this.detectChromiumPath();
-      } else {
-        Logger.error('❌ Auto-installation only supported on Alpine Linux currently');
-        Logger.info('💡 To enable browser support:');
-        Logger.info('   - Set IB_AUTO_INSTALL_BROWSER=true for Alpine containers');
-        Logger.info('   - Or install Chromium manually: apt-get install chromium-browser');
-        return null;
-      }
+      const browser = await chromium.connect(endpoint);
+      Logger.info('✅ Successfully connected to remote browser');
+      return browser;
     } catch (error) {
-      Logger.error('❌ Failed to install Chromium:', error);
-      return null;
+      Logger.error(`❌ Failed to connect to remote browser: ${error}`);
+      throw new Error(`Remote browser connection failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private static async installChromiumAlpine(): Promise<void> {
-    Logger.info('🐳 Installing Chromium on Alpine Linux...');
-    
-    const scriptPath = path.join(__dirname, '..', 'install', 'install-chromium-alpine.sh');
-    
-    if (!existsSync(scriptPath)) {
-      throw new Error(`Installation script not found: ${scriptPath}`);
-    }
-
+  /**
+   * Launch a local browser using Playwright's default behavior
+   */
+  static async launchLocalBrowser(): Promise<Browser> {
+    Logger.info('🔧 Starting local browser with Playwright...');
     try {
-      const result = execSync(`sh "${scriptPath}"`, { 
-        encoding: 'utf8',
-        stdio: 'pipe'
+      const browser = await chromium.launch({
+        headless: true,
+        args: this.getChromiumLaunchArgs()
       });
-      
-      Logger.info('📦 Chromium installation output:');
-      result.split('\n').forEach(line => {
-        if (line.trim()) {
-          Logger.info(`   ${line}`);
-        }
-      });
-      
-      Logger.info('✅ Chromium installation completed');
+      Logger.info('✅ Local browser started successfully');
+      return browser;
     } catch (error) {
+      Logger.error('❌ Failed to start local browser:', error);
+      
+      // Provide helpful error message
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Chromium installation failed: ${errorMessage}`);
+      const suggestions = [
+        '- Use a remote browser: set IB_BROWSER_ENDPOINT=ws://browser:3000',
+        '- Use a browser service: set IB_BROWSER_ENDPOINT=wss://chrome.browserless.io?token=YOUR_TOKEN',
+        '- Install Chromium locally and let Playwright find it',
+        '- Disable headless mode: set IB_HEADLESS_MODE=false'
+      ];
+      
+      const helpText = `\n\nSuggestions:\n${suggestions.join('\n')}`;
+      throw new Error(`Local browser startup failed: ${errorMessage}${helpText}`);
     }
   }
 

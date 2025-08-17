@@ -9,7 +9,7 @@ export interface HeadlessAuthConfig {
   password: string;
   timeout?: number;
   ibClient?: IBClient;
-  autoInstallBrowser?: boolean;
+  browserEndpoint?: string; // Remote browser URL if provided
 }
 
 export interface HeadlessAuthResult {
@@ -27,25 +27,14 @@ export class HeadlessAuthenticator {
     try {
       Logger.info('🔐 Starting headless authentication...');
       
-      // Ensure we have a browser available for authentication
-      Logger.info('🌐 Setting up browser for authentication...');
-      
-      const chromiumPath = await BrowserInstaller.installChromiumIfNeeded(authConfig.autoInstallBrowser ?? false);
-      
-      if (!chromiumPath) {
-        return {
-          success: false,
-          message: 'Browser not available for authentication',
-          error: 'No Chromium executable found and auto-install is disabled. Set IB_AUTO_INSTALL_BROWSER=true to enable auto-installation.'
-        };
+      // Setup browser - remote if endpoint provided, otherwise local
+      if (authConfig.browserEndpoint) {
+        // Use remote browser
+        this.browser = await BrowserInstaller.connectToRemoteBrowser(authConfig.browserEndpoint);
+      } else {
+        // Use local browser - let Playwright handle everything
+        this.browser = await BrowserInstaller.launchLocalBrowser();
       }
-      
-      // Launch browser with detected/installed Chromium
-      this.browser = await chromium.launch({
-        executablePath: chromiumPath,
-        headless: true,
-        args: BrowserInstaller.getChromiumLaunchArgs()
-      });
 
       this.page = await this.browser.newPage();
       
