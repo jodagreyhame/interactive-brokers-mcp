@@ -68,7 +68,7 @@ export class ToolHandlers {
         password: this.context.config.IB_PASSWORD_AUTH,
         timeout: this.context.config.IB_AUTH_TIMEOUT,
         ibClient: this.context.ibClient, // Pass the IB client for authentication checking
-        autoInstallBrowser: this.context.config.IB_AUTO_INSTALL_BROWSER,
+        browserEndpoint: this.context.config.IB_BROWSER_ENDPOINT,
       };
 
       const authenticator = new HeadlessAuthenticator();
@@ -144,7 +144,7 @@ export class ToolHandlers {
             username: this.context.config.IB_USERNAME,
             password: this.context.config.IB_PASSWORD_AUTH,
             timeout: this.context.config.IB_AUTH_TIMEOUT,
-            autoInstallBrowser: this.context.config.IB_AUTO_INSTALL_BROWSER,
+            browserEndpoint: this.context.config.IB_BROWSER_ENDPOINT,
           };
 
           // Validate that we have credentials for headless mode
