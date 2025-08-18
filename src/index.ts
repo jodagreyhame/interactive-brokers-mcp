@@ -53,6 +53,17 @@ function parseArgs(): z.infer<typeof configSchema> {
             Logger.debug(`🔍 Set IB_HEADLESS_MODE to: true (flag only)`);
           }
           break;
+        case 'ib-paper-trading':
+          // Support both --ib-paper-trading (boolean flag) and --ib-paper-trading=true/false
+          if (nextArg && !nextArg.startsWith('--')) {
+            args.IB_PAPER_TRADING = nextArg.toLowerCase() === 'true';
+            Logger.debug(`🔍 Set IB_PAPER_TRADING to: ${nextArg.toLowerCase() === 'true'} (from arg: ${nextArg})`);
+            i++;
+          } else {
+            args.IB_PAPER_TRADING = true;
+            Logger.debug(`🔍 Set IB_PAPER_TRADING to: true (flag only)`);
+          }
+          break;
 
       }
     } else if (arg.includes('=')) {
@@ -79,6 +90,10 @@ function parseArgs(): z.infer<typeof configSchema> {
           args.IB_HEADLESS_MODE = value.toLowerCase() === 'true';
           Logger.debug(`🔍 Set IB_HEADLESS_MODE to: ${value.toLowerCase() === 'true'} (from value: ${value})`);
           break;
+        case 'ib-paper-trading':
+          args.IB_PAPER_TRADING = value.toLowerCase() === 'true';
+          Logger.debug(`🔍 Set IB_PAPER_TRADING to: ${value.toLowerCase() === 'true'} (from value: ${value})`);
+          break;
 
       }
     }
@@ -96,6 +111,8 @@ export const configSchema = z.object({
   IB_AUTH_TIMEOUT: z.number().optional(),
   IB_HEADLESS_MODE: z.boolean().optional(),
   
+  // Paper trading configuration
+  IB_PAPER_TRADING: z.boolean().optional(),
 
 });
 

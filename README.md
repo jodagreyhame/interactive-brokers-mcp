@@ -14,9 +14,16 @@ your IB account to retrieve market data, check positions, and place trades.
 
 ## 🔒 Security Notice
 
-**This MCP server is designed to run locally only** for security reasons. Never
-deploy this to remote servers or cloud platforms as it handles sensitive trading
-credentials and financial data.
+⚠️ **IMPORTANT WARNINGS:**
+
+- **Financial Risk**: Trading involves substantial risk of loss. Always test
+  with paper trading first.
+- **Security**: This software handles sensitive financial data. Only run
+  locally, never on public servers.
+- **No Warranty**: This unofficial software comes with no warranties. Use at
+  your own risk.
+- **Not Financial Advice**: This tool is for automation only, not financial
+  advice.
 
 ## ✨ Features
 
@@ -94,9 +101,38 @@ two-factor authentication (2FA). When 2FA is triggered, the headless
 authentication will wait for you to complete the 2FA process through your
 configured method (mobile app, SMS, etc.) before proceeding.
 
+To enable paper trading, add `"IB_PAPER_TRADING": "true"` to your environment variables:
+
+```json
+{
+  "mcpServers": {
+    "interactive-brokers": {
+      "command": "npx",
+      "args": ["-y", "interactive-brokers-mcp"],
+      "env": {
+        "IB_HEADLESS_MODE": "true",
+        "IB_USERNAME": "your_ib_username",
+        "IB_PASSWORD_AUTH": "your_ib_password",
+        "IB_PAPER_TRADING": "true"
+      }
+    }
+  }
+}
+```
+
 **Security Note**: Store credentials securely and never commit them to version
 control. Consider using environment variable files or secure credential
 management systems.
+
+## Configuration Variables
+
+| Feature | Environment Variable | Command Line Argument |
+|---------|---------------------|----------------------|
+| Username | `IB_USERNAME` | `--ib-username` |
+| Password | `IB_PASSWORD_AUTH` | `--ib-password-auth` |
+| Headless Mode | `IB_HEADLESS_MODE` | `--ib-headless-mode` |
+| Paper Trading | `IB_PAPER_TRADING` | `--ib-paper-trading` |
+| Auth Timeout | `IB_AUTH_TIMEOUT` | `--ib-auth-timeout` |
 
 ## Available MCP Tools
 
@@ -116,25 +152,8 @@ management systems.
 - Complete any required two-factor authentication
 - Try paper trading mode if live trading fails
 
-## Security & Risk Disclaimer
-
-⚠️ **IMPORTANT WARNINGS:**
-
-- **Financial Risk**: Trading involves substantial risk of loss. Always test
-  with paper trading first.
-- **Security**: This software handles sensitive financial data. Only run
-  locally, never on public servers.
-- **No Warranty**: This unofficial software comes with no warranties. Use at
-  your own risk.
-- **Not Financial Advice**: This tool is for automation only, not financial
-  advice.
-
 ## Support
 
-- **IB Gateway Issues**:
-  [Interactive Brokers API Documentation](https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi-v1/#introduction)
-- **MCP Protocol**:
-  [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
 - **This Server**: Open an issue in this repository.
 
 ## License
