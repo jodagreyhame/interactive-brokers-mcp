@@ -15,5 +15,7 @@ export const config = {
   IB_AUTH_TIMEOUT: parseInt(process.env.IB_AUTH_TIMEOUT || "60000"),
   IB_HEADLESS_MODE: process.env.IB_HEADLESS_MODE === "true",
   
+  // Paper trading configuration
+  IB_PAPER_TRADING: process.env.IB_PAPER_TRADING === "true",
 
 };

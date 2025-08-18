@@ -16,6 +16,9 @@ FROM node:lts-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Paper trading configuration (default: false for live trading)
+ENV IB_PAPER_TRADING=false
+
 # Copy production artifacts
 COPY --from=build /app/dist ./dist
 COPY package.json package-lock.json ./

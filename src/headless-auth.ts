@@ -9,6 +9,7 @@ export interface HeadlessAuthConfig {
   password: string;
   timeout?: number;
   ibClient?: IBClient;
+  paperTrading?: boolean;
 }
 
 export interface HeadlessAuthResult {
@@ -63,6 +64,60 @@ export class HeadlessAuthenticator {
       
       Logger.info('🔄 Submitting login form...');
       await this.page.click(submitSelector);
+
+      // Handle paper trading toggle if specified
+      if (authConfig.paperTrading !== undefined) {
+        try {
+          Logger.info(`📊 Handling paper trading configuration (${authConfig.paperTrading ? 'enabled' : 'disabled'})...`);
+          
+          // Wait for the page to load after login submission
+          await this.page.waitForTimeout(2000);
+          
+          // Look for the paper trading switch/checkbox
+          const paperSwitchSelectors = [
+            'input[name="paperSwitch"]',
+            'input[id="paperSwitch"]',
+            'input[type="checkbox"][name*="paper"]',
+            'input[type="checkbox"][id*="paper"]',
+            '.paper-trading input[type="checkbox"]',
+            '[data-testid="paper-trading"] input[type="checkbox"]'
+          ];
+          
+          let paperSwitchFound = false;
+          for (const selector of paperSwitchSelectors) {
+            try {
+              const element = await this.page.$(selector);
+              if (element) {
+                const isChecked = await element.isChecked();
+                const shouldBeChecked = authConfig.paperTrading;
+                
+                if (isChecked !== shouldBeChecked) {
+                  Logger.info(`📊 Setting paper trading switch: ${shouldBeChecked ? 'ON' : 'OFF'}`);
+                  await element.click();
+                } else {
+                  Logger.info(`📊 Paper trading switch already in correct state: ${shouldBeChecked ? 'ON' : 'OFF'}`);
+                }
+                
+                paperSwitchFound = true;
+                break;
+              }
+            } catch (error) {
+              // Continue to next selector
+            }
+          }
+          
+          if (!paperSwitchFound) {
+            Logger.warn('⚠️ Paper trading toggle not found on page - it may appear later or may not be available for this account type');
+          }
+          
+          // Wait a bit more for any page updates after toggling
+          await this.page.waitForTimeout(1000);
+          
+        } catch (error) {
+          Logger.warn('⚠️ Error while handling paper trading configuration:', error);
+          // Continue with authentication - this shouldn't be a fatal error
+        }
+      }
 
       // Wait for the authentication process to complete using IB client polling
       Logger.info('⏳ Waiting for authentication to complete...');

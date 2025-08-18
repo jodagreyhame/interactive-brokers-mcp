@@ -68,6 +68,7 @@ export class ToolHandlers {
         password: this.context.config.IB_PASSWORD_AUTH,
         timeout: this.context.config.IB_AUTH_TIMEOUT,
         ibClient: this.context.ibClient, // Pass the IB client for authentication checking
+        paperTrading: this.context.config.IB_PAPER_TRADING,
       };
 
       const authenticator = new HeadlessAuthenticator();

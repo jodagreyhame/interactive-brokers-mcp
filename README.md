@@ -98,6 +98,48 @@ configured method (mobile app, SMS, etc.) before proceeding.
 control. Consider using environment variable files or secure credential
 management systems.
 
+## Paper Trading Configuration
+
+You can configure the server to automatically enable paper trading mode during authentication. This is useful for testing strategies and development without risking real money:
+
+```json
+{
+  "mcpServers": {
+    "interactive-brokers": {
+      "command": "npx",
+      "args": ["-y", "interactive-brokers-mcp"],
+      "env": {
+        "IB_HEADLESS_MODE": "true",
+        "IB_USERNAME": "your_ib_username",
+        "IB_PASSWORD_AUTH": "your_ib_password",
+        "IB_PAPER_TRADING": "true"
+      }
+    }
+  }
+}
+```
+
+**Environment Variables:**
+
+- `IB_PAPER_TRADING`: Set to `"true"` to enable paper trading mode, `"false"` for live trading (default: `false`)
+
+**Command Line Arguments:**
+
+You can also enable paper trading using command line arguments:
+
+```bash
+npx interactive-brokers-mcp --ib-paper-trading=true
+# or
+npx interactive-brokers-mcp --ib-paper-trading
+```
+
+**Notes:**
+
+- Paper trading mode is automatically configured during the headless authentication process
+- If the paper trading toggle is not found on the authentication page, a warning will be logged but authentication will continue
+- Some account types may not have access to paper trading - check with Interactive Brokers
+- When paper trading is enabled, all trades will be simulated and no real money will be at risk
+
 ## Available MCP Tools
 
 | Tool               | Description                               |
