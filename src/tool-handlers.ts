@@ -377,7 +377,7 @@ export class ToolHandlers {
         symbol: input.symbol,
         action: input.action,
         orderType: input.orderType,
-        quantity: input.quantity,
+        quantity: Number(input.quantity),
         price: input.price,
         stopPrice: input.stopPrice,
       });

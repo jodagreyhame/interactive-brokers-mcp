@@ -1,155 +1,158 @@
-import { z } from "zod";
-
 export interface ToolDefinition {
   name: string;
   description: string;
-  inputSchema: {
-    type: "object";
-    properties: { [key: string]: any };
-    required?: string[];
-  };
+  inputSchema: Record<string, any>;
 }
 
-// Tool input schemas (as JSON Schema objects for MCP protocol)
+// ── Base helpers ──────────────────────────────────────────────────────────────
+const V = "https://json-schema.org/draft/2020-12/schema";
+
+// Accept either integer or stringified integer (tolerant); tighten if you prefer.
+const IntegerOrStringInteger = {
+  oneOf: [
+    { type: "integer", minimum: 1 },
+    { type: "string", pattern: "^[0-9]+$" }
+  ],
+  description: "Positive whole number (e.g., 1, 2, 10)."
+};
+
+// ── Schemas ───────────────────────────────────────────────────────────────────
 export const AuthenticateSchema = {
-  type: "object" as const,
+  $schema: V,
+  type: "object",
   properties: {},
-  required: [],
+  additionalProperties: false
 };
 
 export const GetAccountInfoSchema = {
-  type: "object" as const,
+  $schema: V,
+  type: "object",
   properties: {},
-  required: [],
+  additionalProperties: false
 };
 
 export const GetPositionsSchema = {
-  type: "object" as const,
+  $schema: V,
+  type: "object",
   properties: {
     accountId: {
       type: "string",
-      description: "Account ID (optional, uses default if not provided)",
-    },
+      description: "Account ID (optional, uses default if omitted)"
+    }
   },
-  required: [],
+  additionalProperties: false
 };
 
 export const GetMarketDataSchema = {
-  type: "object" as const,
+  $schema: V,
+  type: "object",
   properties: {
     symbol: {
       type: "string",
-      description: "Trading symbol (e.g., AAPL, TSLA)",
+      description: "Trading symbol (e.g., AAPL, TSLA)"
     },
     exchange: {
       type: "string",
-      description: "Exchange (optional)",
-    },
+      description: "Exchange (optional)"
+    }
   },
   required: ["symbol"],
+  additionalProperties: false
 };
 
 export const PlaceOrderSchema = {
-  type: "object" as const,
+  $schema: V,
+  type: "object",
   properties: {
-    accountId: {
-      type: "string",
-      description: "Account ID",
-    },
-    symbol: {
-      type: "string",
-      description: "Trading symbol",
-    },
-    action: {
-      type: "string",
-      enum: ["BUY", "SELL"],
-      description: "Order action",
-    },
-    orderType: {
-      type: "string",
-      enum: ["MKT", "LMT", "STP"],
-      description: "Order type",
-    },
-    quantity: {
-      type: "number",
-      description: "Number of shares",
-    },
-    price: {
-      type: "number",
-      description: "Limit price (required for LMT orders)",
-    },
-    stopPrice: {
-      type: "number",
-      description: "Stop price (required for STP orders)",
-    },
+    accountId: { type: "string", description: "Account ID" },
+    symbol:    { type: "string", description: "Trading symbol" },
+    action:    { type: "string", enum: ["BUY", "SELL"], description: "Order action" },
+    orderType: { type: "string", enum: ["MKT", "LMT", "STP"], description: "Order type" },
+    quantity:  IntegerOrStringInteger,
+    price:     { type: "number", description: "Limit price (required for LMT)" },
+    stopPrice: { type: "number", description: "Stop price (required for STP)" }
   },
   required: ["accountId", "symbol", "action", "orderType", "quantity"],
+  additionalProperties: false,
+
+  // Conditional requirements
+  allOf: [
+    {
+      if: { properties: { orderType: { const: "LMT" } }, required: ["orderType"] },
+      then: { required: ["price"] }
+    },
+    {
+      if: { properties: { orderType: { const: "STP" } }, required: ["orderType"] },
+      then: { required: ["stopPrice"] }
+    }
+  ]
 };
 
 export const GetOrderStatusSchema = {
-  type: "object" as const,
+  $schema: V,
+  type: "object",
   properties: {
-    orderId: {
-      type: "string",
-      description: "Order ID",
-    },
+    orderId: { type: "string", description: "Order ID" }
   },
   required: ["orderId"],
+  additionalProperties: false
 };
 
-// Tool definitions
+// ── Tool definitions (strengthened descriptions to guide the agent) ───────────
 export const toolDefinitions: ToolDefinition[] = [
   {
     name: "authenticate",
-    description: "Authenticate with Interactive Brokers (uses headless mode if enabled in config)",
-    inputSchema: AuthenticateSchema,
+    description:
+      "Authenticate with Interactive Brokers. Usage: `{}` (no parameters). Never pass null/empty string.",
+    inputSchema: AuthenticateSchema
   },
   {
     name: "get_account_info",
-    description: "Get account information and balances",
-    inputSchema: GetAccountInfoSchema,
+    description:
+      "Get account information and balances. Usage: `{}` (no parameters).",
+    inputSchema: GetAccountInfoSchema
   },
   {
     name: "get_positions",
-    description: "Get current positions for an account",
-    inputSchema: GetPositionsSchema,
+    description:
+      "Get current positions. Usage: `{}` or `{ \"accountId\": \"<id>\" }`.",
+    inputSchema: GetPositionsSchema
   },
   {
     name: "get_market_data",
-    description: "Get real-time market data for a symbol",
-    inputSchema: GetMarketDataSchema,
+    description:
+      "Get real-time market data. Usage: `{ \"symbol\": \"AAPL\" }` or `{ \"symbol\": \"AAPL\", \"exchange\": \"NASDAQ\" }`.",
+    inputSchema: GetMarketDataSchema
   },
   {
     name: "place_order",
-    description: "Place a trading order",
-    inputSchema: PlaceOrderSchema,
+    description:
+      "Place an order. Usage examples:\n" +
+      "- Market buy: `{ \"accountId\":\"abc\", \"symbol\":\"AAPL\", \"action\":\"BUY\", \"orderType\":\"MKT\", \"quantity\":1 }`\n" +
+      "- Limit sell: `{ \"accountId\":\"abc\", \"symbol\":\"AAPL\", \"action\":\"SELL\", \"orderType\":\"LMT\", \"quantity\":1, \"price\":185.5 }`\n" +
+      "- Stop sell: `{ \"accountId\":\"abc\", \"symbol\":\"AAPL\", \"action\":\"SELL\", \"orderType\":\"STP\", \"quantity\":1, \"stopPrice\":180 }`",
+    inputSchema: PlaceOrderSchema
   },
   {
     name: "get_order_status",
-    description: "Get the status of a specific order",
-    inputSchema: GetOrderStatusSchema,
-  },
+    description:
+      "Get status for an order. Usage: `{ \"orderId\": \"12345\" }`.",
+    inputSchema: GetOrderStatusSchema
+  }
 ];
 
-// Export TypeScript types for type inference
+// ── TS types (unchanged, but consider aligning quantity to number | string) ───
 export type AuthenticateInput = {};
 export type GetAccountInfoInput = {};
-export type GetPositionsInput = {
-  accountId?: string;
-};
-export type GetMarketDataInput = {
-  symbol: string;
-  exchange?: string;
-};
+export type GetPositionsInput = { accountId?: string };
+export type GetMarketDataInput = { symbol: string; exchange?: string };
 export type PlaceOrderInput = {
   accountId: string;
   symbol: string;
   action: "BUY" | "SELL";
   orderType: "MKT" | "LMT" | "STP";
-  quantity: number;
+  quantity: number | string;   // if you keep tolerant schema above
   price?: number;
   stopPrice?: number;
 };
-export type GetOrderStatusInput = {
-  orderId: string;
-};
+export type GetOrderStatusInput = { orderId: string };
