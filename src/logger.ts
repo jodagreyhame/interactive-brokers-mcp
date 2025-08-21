@@ -106,21 +106,40 @@ export class Logger {
   private static serializeArgument(arg: any): string {
     if (arg instanceof Error) {
       // For Error objects, extract all important properties including non-enumerable ones
-      return JSON.stringify({
-        ...arg,
-        name: arg.name,
-        message: arg.message,
-        stack: arg.stack,        
-      });
+      try {
+        return JSON.stringify({
+          ...arg,
+          name: arg.name,
+          message: arg.message,
+          stack: arg.stack,        
+        });
+      } catch (circularError) {
+        // If even the error object has circular references, return basic info
+        return `[Error: ${arg.name}: ${arg.message}]`;
+      }
     } else if (typeof arg === 'object' && arg !== null) {
       try {
-        return JSON.stringify(arg);
+        return JSON.stringify(arg, Logger.getCircularReplacer());
       } catch (circularError) {
-        // Handle circular references
-        return '[Object with circular reference]';
+        // Handle other serialization errors
+        return '[Object with serialization error]';
       }
     } else {
       return String(arg);
     }
+  }
+
+  // Helper method to create a replacer function for handling circular references
+  private static getCircularReplacer() {
+    const seen = new WeakSet();
+    return (key: string, value: any) => {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular Reference]';
+        }
+        seen.add(value);
+      }
+      return value;
+    };
   }
 }
