@@ -21,7 +21,9 @@ export interface OrderRequest {
   stopPrice?: number;
 }
 
-
+const isError = (error: unknown): error is Error => {
+  return error instanceof Error;
+};
 
 export class IBClient {
   private client!: AxiosInstance;
@@ -173,7 +175,7 @@ export class IBClient {
       this.isAuthenticated = true;
       this.authAttempts = 0; // Reset on success
     } catch (error) {
-      Logger.error(`[AUTH] Authentication failed (attempt ${this.authAttempts}/${this.maxAuthAttempts}):`, error);
+      Logger.error(`[AUTH] Authentication failed (attempt ${this.authAttempts}/${this.maxAuthAttempts}):`, isError(error) && error.message, isError(error) && error.stack);
       if (this.authAttempts >= this.maxAuthAttempts) {
         throw new Error(`Failed to authenticate with IB Gateway after ${this.maxAuthAttempts} attempts`);
       }
