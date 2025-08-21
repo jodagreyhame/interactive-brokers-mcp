@@ -331,21 +331,21 @@ export class IBClient {
 
       // Prepare order object
       const order = {
-        conid,
+        conid: Number(conid), // Ensure conid is number
         orderType: orderRequest.orderType,
         side: orderRequest.action,
-        quantity: orderRequest.quantity,
+        quantity: Number(orderRequest.quantity), // Ensure quantity is number
         tif: "DAY", // Time in force
       };
 
       // Add price for limit orders
-      if (orderRequest.orderType === "LMT" && orderRequest.price) {
-        (order as any).price = orderRequest.price;
+      if (orderRequest.orderType === "LMT" && orderRequest.price !== undefined) {
+        (order as any).price = Number(orderRequest.price);
       }
 
       // Add stop price for stop orders
-      if (orderRequest.orderType === "STP" && orderRequest.stopPrice) {
-        (order as any).auxPrice = orderRequest.stopPrice;
+      if (orderRequest.orderType === "STP" && orderRequest.stopPrice !== undefined) {
+        (order as any).auxPrice = Number(orderRequest.stopPrice);
       }
 
       // Place the order

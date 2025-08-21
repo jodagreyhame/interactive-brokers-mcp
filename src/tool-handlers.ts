@@ -377,7 +377,7 @@ export class ToolHandlers {
         symbol: input.symbol,
         action: input.action,
         orderType: input.orderType,
-        quantity: Number(input.quantity),
+        quantity: input.quantity, // Already converted by Zod schema
         price: input.price,
         stopPrice: input.stopPrice,
       });
