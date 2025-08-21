@@ -59,65 +59,45 @@ export class HeadlessAuthenticator {
       await this.page.fill(passwordSelector, authConfig.password);
       Logger.info('✅ Password filled');
 
+      // Handle paper trading toggle if specified - BEFORE submitting the form
+      if (authConfig.paperTrading !== undefined) {
+        try {
+          Logger.info(`📊 Setting paper trading to ${authConfig.paperTrading ? 'enabled' : 'disabled'}...`);
+          
+          // Wait a moment for any dynamic content to load
+          await this.page.waitForTimeout(1000);
+          
+          // Look for the specific paper trading checkbox
+          const paperSwitchSelector = 'label[for="toggle1"]';
+          
+          const element = await this.page.$(paperSwitchSelector);
+          if (element) {
+            const isChecked = await element.isChecked();
+            const shouldBeChecked = authConfig.paperTrading;
+            
+            if (isChecked !== shouldBeChecked) {
+              Logger.info(`📊 Clicking paper trading checkbox to turn it ${shouldBeChecked ? 'ON' : 'OFF'}`);
+              await element.click();
+              // Wait for any page updates after toggling
+              await this.page.waitForTimeout(500);
+            } else {
+              Logger.info(`📊 Paper trading checkbox already in correct state: ${shouldBeChecked ? 'ON' : 'OFF'}`);
+            }
+          } else {
+            Logger.warn('⚠️ Paper trading checkbox not found - may not be available for this account type');
+          }
+          
+        } catch (error) {
+          Logger.warn('⚠️ Error while setting paper trading configuration:', error);
+          // Continue with authentication - this shouldn't be a fatal error
+        }
+      }
+
       // Look for submit button and click it
       const submitSelector = 'input[type="submit"], button[type="submit"], button';
       
       Logger.info('🔄 Submitting login form...');
       await this.page.click(submitSelector);
-
-      // Handle paper trading toggle if specified
-      if (authConfig.paperTrading !== undefined) {
-        try {
-          Logger.info(`📊 Handling paper trading configuration (${authConfig.paperTrading ? 'enabled' : 'disabled'})...`);
-          
-          // Wait for the page to load after login submission
-          await this.page.waitForTimeout(2000);
-          
-          // Look for the paper trading switch/checkbox
-          const paperSwitchSelectors = [
-            'input[name="paperSwitch"]',
-            'input[id="paperSwitch"]',
-            'input[type="checkbox"][name*="paper"]',
-            'input[type="checkbox"][id*="paper"]',
-            '.paper-trading input[type="checkbox"]',
-            '[data-testid="paper-trading"] input[type="checkbox"]'
-          ];
-          
-          let paperSwitchFound = false;
-          for (const selector of paperSwitchSelectors) {
-            try {
-              const element = await this.page.$(selector);
-              if (element) {
-                const isChecked = await element.isChecked();
-                const shouldBeChecked = authConfig.paperTrading;
-                
-                if (isChecked !== shouldBeChecked) {
-                  Logger.info(`📊 Setting paper trading switch: ${shouldBeChecked ? 'ON' : 'OFF'}`);
-                  await element.click();
-                } else {
-                  Logger.info(`📊 Paper trading switch already in correct state: ${shouldBeChecked ? 'ON' : 'OFF'}`);
-                }
-                
-                paperSwitchFound = true;
-                break;
-              }
-            } catch (error) {
-              // Continue to next selector
-            }
-          }
-          
-          if (!paperSwitchFound) {
-            Logger.warn('⚠️ Paper trading toggle not found on page - it may appear later or may not be available for this account type');
-          }
-          
-          // Wait a bit more for any page updates after toggling
-          await this.page.waitForTimeout(1000);
-          
-        } catch (error) {
-          Logger.warn('⚠️ Error while handling paper trading configuration:', error);
-          // Continue with authentication - this shouldn't be a fatal error
-        }
-      }
 
       // Wait for the authentication process to complete using IB client polling
       Logger.info('⏳ Waiting for authentication to complete...');

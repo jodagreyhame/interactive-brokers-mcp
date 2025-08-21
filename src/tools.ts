@@ -1,12 +1,18 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { IBClient } from "./ib-client.js";
 import { IBGatewayManager } from "./gateway-manager.js";
 import { ToolHandlers, ToolHandlerContext } from "./tool-handlers.js";
-import { toolDefinitions } from "./tool-definitions.js";
+import { 
+  AuthenticateZodShape,
+  GetAccountInfoZodShape, 
+  GetPositionsZodShape,
+  GetMarketDataZodShape,
+  PlaceOrderZodShape,
+  GetOrderStatusZodShape
+} from "./tool-definitions.js";
 
 export function registerTools(
-  server: Server, 
+  server: McpServer, 
   ibClient: IBClient, 
   gatewayManager?: IBGatewayManager, 
   userConfig?: any
@@ -21,65 +27,56 @@ export function registerTools(
   // Create handlers instance
   const handlers = new ToolHandlers(context);
 
-  // Get available tools based on configuration
-  const availableTools = toolDefinitions.filter(toolDef => {
-    // Skip authenticate tool if in headless mode
-    if (toolDef.name === "authenticate" && userConfig?.IB_HEADLESS_MODE) {
-      return false;
-    }
-    return true;
-  });
+  // Register authenticate tool (skip if in headless mode)
+  if (!userConfig?.IB_HEADLESS_MODE) {
+    server.tool(
+      "authenticate",
+      "Authenticate with Interactive Brokers. Usage: `{ \"confirm\": true }`.",
+      AuthenticateZodShape,
+      async (args) => await handlers.authenticate(args)
+    );
+  }
 
-  // Register ListTools handler
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: availableTools.map(toolDef => ({
-        name: toolDef.name,
-        description: toolDef.description,
-        inputSchema: toolDef.inputSchema,
-      })),
-    };
-  });
+  // Register get_account_info tool
+  server.tool(
+    "get_account_info",
+    "Get account information and balances. Usage: `{ \"confirm\": true }`.",
+    GetAccountInfoZodShape,
+    async (args) => await handlers.getAccountInfo(args)
+  );
 
-  // Register CallTool handler
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+  // Register get_positions tool
+  server.tool(
+    "get_positions", 
+    "Get current positions. Usage: `{}` or `{ \"accountId\": \"<id>\" }`.",
+    GetPositionsZodShape,
+    async (args) => await handlers.getPositions(args)
+  );
 
-    try {
-      switch (name) {
-        case "authenticate":
-          return await handlers.authenticate(args as any || {});
-        case "get_account_info":
-          return await handlers.getAccountInfo(args as any || {});
-        case "get_positions":
-          return await handlers.getPositions(args as any || {});
-        case "get_market_data":
-          return await handlers.getMarketData(args as any || {});
-        case "place_order":
-          return await handlers.placeOrder(args as any || {});
-        case "get_order_status":
-          return await handlers.getOrderStatus(args as any || {});
-        default:
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Unknown tool: ${name}`,
-              },
-            ],
-          };
-      }
-    } catch (error) {
-      // This is a fallback error handler in case the individual handlers don't catch something
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Tool error in ${name}: ${errorMessage}. Please check your Interactive Brokers connection and authentication status.`,
-          },
-        ],
-      };
-    }
-  });
+  // Register get_market_data tool
+  server.tool(
+    "get_market_data",
+    "Get real-time market data. Usage: `{ \"symbol\": \"AAPL\" }` or `{ \"symbol\": \"AAPL\", \"exchange\": \"NASDAQ\" }`.",
+    GetMarketDataZodShape,
+    async (args) => await handlers.getMarketData(args)
+  );
+
+  // Register place_order tool
+  server.tool(
+    "place_order",
+    "Place a trading order. Examples:\n" +
+    "- Market buy: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"BUY\",\"orderType\":\"MKT\",\"quantity\":1 }`\n" +
+    "- Limit sell: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"SELL\",\"orderType\":\"LMT\",\"quantity\":1,\"price\":185.5 }`\n" +
+    "- Stop sell: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"SELL\",\"orderType\":\"STP\",\"quantity\":1,\"stopPrice\":180 }`",
+    PlaceOrderZodShape,
+    async (args) => await handlers.placeOrder(args)
+  );
+
+  // Register get_order_status tool
+  server.tool(
+    "get_order_status",
+    "Get the status of a specific order. Usage: `{ \"orderId\": \"12345\" }`.",
+    GetOrderStatusZodShape,
+    async (args) => await handlers.getOrderStatus(args)
+  );
 }

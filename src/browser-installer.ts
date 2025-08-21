@@ -1,27 +1,26 @@
 import { chromium, Browser } from 'playwright-core';
 import { Logger } from './logger.js';
+import * as fs from 'fs';
 
 export class BrowserInstaller {
+  static headless: boolean = true; // Set this to false to debug 
   /**
    * Launch a local browser using Playwright's default behavior or system Chromium
    */
   static async launchLocalBrowser(): Promise<Browser> {
     Logger.info('🔧 Starting local browser with Playwright...');
     try {
-      // Check for system Chromium executable path from environment
-      const systemChromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-                                 process.env.CHROMIUM_PATH ||
-                                 process.env.GOOGLE_CHROME_BIN;
-
+      // Find the best available browser executable
+      const executablePath = await this.findBrowserExecutable();
+      
       const launchOptions: any = {
-        headless: true,
-        args: this.getChromiumLaunchArgs()
+        headless: this.headless,
+        args: this.getChromiumLaunchArgs(this.headless) // Pass headless=false to avoid conflicting args
       };
 
-      // If we have a system Chromium path, use it
-      if (systemChromiumPath) {
-        Logger.info(`🎯 Using system Chromium at: ${systemChromiumPath}`);
-        launchOptions.executablePath = systemChromiumPath;
+      if (executablePath) {
+        Logger.info(`🎯 Using browser at: ${executablePath}`);
+        launchOptions.executablePath = executablePath;
       } else {
         Logger.info('🔧 Using Playwright\'s default Chromium');
       }
@@ -32,22 +31,142 @@ export class BrowserInstaller {
     } catch (error) {
       Logger.error('❌ Failed to start local browser:', error);
       
-      // Provide helpful error message
+      // Provide helpful error message with platform-specific suggestions
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const suggestions = [
-        '- Install Chromium locally: apk add chromium',
-        '- Set system Chromium path: PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser',
-        '- Disable headless mode: set IB_HEADLESS_MODE=false'
-      ];
+      const suggestions = this.getPlatformSpecificSuggestions();
       
       const helpText = `\n\nSuggestions:\n${suggestions.join('\n')}`;
       throw new Error(`Local browser startup failed: ${errorMessage}${helpText}`);
     }
   }
 
-  static getChromiumLaunchArgs(): string[] {
-    return [
-      '--headless=new',
+  /**
+   * Find the best available browser executable on the system
+   */
+  private static async findBrowserExecutable(): Promise<string | null> {
+    // Check environment variables first
+    const envPaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROMIUM_PATH,
+      process.env.GOOGLE_CHROME_BIN,
+      process.env.CHROME_BIN
+    ].filter(Boolean);
+
+    for (const envPath of envPaths) {
+      if (envPath && await this.isExecutableFile(envPath)) {
+        Logger.info(`🔍 Found browser via environment variable: ${envPath}`);
+        return envPath;
+      }
+    }
+
+    // Platform-specific search paths
+    const searchPaths = this.getPlatformBrowserPaths();
+    
+    for (const browserPath of searchPaths) {
+      if (await this.isExecutableFile(browserPath)) {
+        Logger.info(`🔍 Found system browser: ${browserPath}`);
+        return browserPath;
+      }
+    }
+
+    Logger.warn('⚠️ No system browser found, will try Playwright default');
+    return null;
+  }
+
+  /**
+   * Get platform-specific browser search paths
+   */
+  private static getPlatformBrowserPaths(): string[] {
+    const platform = process.platform;
+    
+    switch (platform) {
+      case 'darwin': // macOS
+        return [
+          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+          '/Applications/Chromium.app/Contents/MacOS/Chromium',
+          '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+          '/usr/local/bin/chrome',
+          '/usr/local/bin/chromium',
+          '/opt/homebrew/bin/chrome',
+          '/opt/homebrew/bin/chromium'
+        ];
+      
+      case 'linux':
+        return [
+          '/usr/bin/google-chrome-stable',
+          '/usr/bin/google-chrome',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/chromium',
+          '/snap/bin/chromium',
+          '/usr/local/bin/chrome',
+          '/usr/local/bin/chromium'
+        ];
+      
+      case 'win32':
+        return [
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files\\Chromium\\Application\\chromium.exe',
+          'C:\\Program Files (x86)\\Chromium\\Application\\chromium.exe'
+        ];
+      
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Get platform-specific suggestions for fixing browser issues
+   */
+  private static getPlatformSpecificSuggestions(): string[] {
+    const platform = process.platform;
+    
+    switch (platform) {
+      case 'darwin': // macOS
+        return [
+          '- Install Chrome: brew install --cask google-chrome',
+          '- Install Chromium: brew install --cask chromium',
+          '- Install Playwright browsers: npx playwright install chromium',
+          '- Set custom path: export CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"'
+        ];
+      
+      case 'linux':
+        return [
+          '- Install Chrome: apt-get install google-chrome-stable',
+          '- Install Chromium: apt-get install chromium-browser',
+          '- Install Playwright browsers: npx playwright install chromium',
+          '- Set custom path: export CHROME_BIN=/usr/bin/google-chrome'
+        ];
+      
+      case 'win32':
+        return [
+          '- Install Chrome from https://www.google.com/chrome/',
+          '- Install Playwright browsers: npx playwright install chromium',
+          '- Set custom path: set CHROME_BIN="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"'
+        ];
+      
+      default:
+        return [
+          '- Install Playwright browsers: npx playwright install chromium',
+          '- Set custom path with CHROME_BIN environment variable'
+        ];
+    }
+  }
+
+  /**
+   * Check if a file exists and is executable
+   */
+  private static async isExecutableFile(filePath: string): Promise<boolean> {
+    try {
+      const stats = await fs.promises.stat(filePath);
+      return stats.isFile() && !!(stats.mode & parseInt('111', 8));
+    } catch {
+      return false;
+    }
+  }
+
+  static getChromiumLaunchArgs(headless: boolean = true): string[] {
+    const args = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -60,5 +179,12 @@ export class BrowserInstaller {
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
     ];
+
+    // Only add headless arg if headless mode is requested
+    if (headless) {
+      args.unshift('--headless=new');
+    }
+
+    return args;
   }
 }

@@ -1,4 +1,4 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { IBClient } from "./ib-client.js";
@@ -232,14 +232,9 @@ function IBMCP({ config: userConfig }: { config: z.infer<typeof configSchema> })
   Logger.info('Gateway starting...');
 
   // Create MCP server
-  const server = new Server({
+  const server = new McpServer({
     name: "interactive-brokers-mcp",
     version: "1.0.0"
-  }, {
-    capabilities: {
-      tools: {},
-      logging: {},
-    }
   });
 
   // Register all tools with merged config
