@@ -413,7 +413,7 @@ export class IBClient {
         throw authError;
       }
       
-      throw new Error("Failed to confirm order");
+      throw new Error("Failed to confirm order: " + (error as any).message);
     }
   }
 
