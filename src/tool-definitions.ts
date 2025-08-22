@@ -42,7 +42,7 @@ export const GetOrderStatusZodShape = {
 };
 
 export const ConfirmOrderZodShape = {
-  orderId: z.string(),
+  replyId: z.string(),
   messageIds: z.array(z.string())
 };
 

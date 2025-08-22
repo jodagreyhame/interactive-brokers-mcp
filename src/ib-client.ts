@@ -388,15 +388,15 @@ export class IBClient {
 
   /**
    * Confirm an order by replying to confirmation messages
-   * @param orderId The order ID from the confirmation response
+   * @param replyId The reply ID from the confirmation response
    * @param messageIds Array of message IDs to confirm
    * @returns The confirmation response
    */
-  async confirmOrder(orderId: string, messageIds: string[]): Promise<any> {
+  async confirmOrder(replyId: string, messageIds: string[]): Promise<any> {
     try {
-      Logger.log(`Confirming order ${orderId} with message IDs:`, messageIds);
+      Logger.log(`Confirming order with reply ID ${replyId} and message IDs:`, messageIds);
       
-      const response = await this.client.post("/iserver/reply", {
+      const response = await this.client.post(`/iserver/reply/${replyId}`, {
         confirmed: true,
         messageIds: messageIds
       });

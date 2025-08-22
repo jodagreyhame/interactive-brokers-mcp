@@ -85,7 +85,7 @@ export function registerTools(
   // Register confirm_order tool
   server.tool(
     "confirm_order",
-    "Manually confirm an order that requires confirmation. Usage: `{ \"orderId\": \"12345\", \"messageIds\": [\"o10151\", \"o10153\"] }`.",
+    "Manually confirm an order that requires confirmation. Usage: `{ \"replyId\": \"742a95a7-55f6-4d67-861b-2fd3e2b61e3c\", \"messageIds\": [\"o10151\", \"o10153\"] }`.",
     ConfirmOrderZodShape,
     async (args) => await handlers.confirmOrder(args)
   );

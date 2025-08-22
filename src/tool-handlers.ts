@@ -444,7 +444,7 @@ export class ToolHandlers {
         await this.ensureAuth();
       }
       
-      const result = await this.context.ibClient.confirmOrder(input.orderId, input.messageIds);
+      const result = await this.context.ibClient.confirmOrder(input.replyId, input.messageIds);
       return {
         content: [
           {
