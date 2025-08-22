@@ -10,6 +10,7 @@ import {
   GetMarketDataInput,
   PlaceOrderInput,
   GetOrderStatusInput,
+  ConfirmOrderInput,
 } from "./tool-definitions.js";
 
 export interface ToolHandlerContext {
@@ -380,6 +381,7 @@ export class ToolHandlers {
         quantity: input.quantity, // Already converted by Zod schema
         price: input.price,
         stopPrice: input.stopPrice,
+        suppressConfirmations: input.suppressConfirmations,
       });
       return {
         content: [
@@ -412,6 +414,37 @@ export class ToolHandlers {
       }
       
       const result = await this.context.ibClient.getOrderStatus(input.orderId);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: this.formatError(error),
+          },
+        ],
+      };
+    }
+  }
+
+  async confirmOrder(input: ConfirmOrderInput): Promise<ToolHandlerResult> {
+    try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
+      // Ensure authentication in headless mode
+      if (this.context.config.IB_HEADLESS_MODE) {
+        await this.ensureAuth();
+      }
+      
+      const result = await this.context.ibClient.confirmOrder(input.orderId, input.messageIds);
       return {
         content: [
           {

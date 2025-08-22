@@ -8,7 +8,8 @@ import {
   GetPositionsZodShape,
   GetMarketDataZodShape,
   PlaceOrderZodShape,
-  GetOrderStatusZodShape
+  GetOrderStatusZodShape,
+  ConfirmOrderZodShape
 } from "./tool-definitions.js";
 
 export function registerTools(
@@ -67,7 +68,8 @@ export function registerTools(
     "Place a trading order. Examples:\n" +
     "- Market buy: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"BUY\",\"orderType\":\"MKT\",\"quantity\":1 }`\n" +
     "- Limit sell: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"SELL\",\"orderType\":\"LMT\",\"quantity\":1,\"price\":185.5 }`\n" +
-    "- Stop sell: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"SELL\",\"orderType\":\"STP\",\"quantity\":1,\"stopPrice\":180 }`",
+    "- Stop sell: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"SELL\",\"orderType\":\"STP\",\"quantity\":1,\"stopPrice\":180 }`\n" +
+    "- Suppress confirmations: `{ \"accountId\":\"abc\",\"symbol\":\"AAPL\",\"action\":\"BUY\",\"orderType\":\"MKT\",\"quantity\":1,\"suppressConfirmations\":true }`",
     PlaceOrderZodShape,
     async (args) => await handlers.placeOrder(args)
   );
@@ -78,5 +80,13 @@ export function registerTools(
     "Get the status of a specific order. Usage: `{ \"orderId\": \"12345\" }`.",
     GetOrderStatusZodShape,
     async (args) => await handlers.getOrderStatus(args)
+  );
+
+  // Register confirm_order tool
+  server.tool(
+    "confirm_order",
+    "Manually confirm an order that requires confirmation. Usage: `{ \"orderId\": \"12345\", \"messageIds\": [\"o10151\", \"o10153\"] }`.",
+    ConfirmOrderZodShape,
+    async (args) => await handlers.confirmOrder(args)
   );
 }

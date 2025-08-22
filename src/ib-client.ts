@@ -19,6 +19,7 @@ export interface OrderRequest {
   quantity: number;
   price?: number;
   stopPrice?: number;
+  suppressConfirmations?: boolean;
 }
 
 const isError = (error: unknown): error is Error => {
@@ -356,6 +357,20 @@ export class IBClient {
         }
       );
 
+      // Check if we received confirmation messages that need to be handled
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        const firstResponse = response.data[0];
+        
+        // Check if this is a confirmation message response
+        if (firstResponse.id && firstResponse.message && firstResponse.messageIds && orderRequest.suppressConfirmations) {
+          Logger.log("Order confirmation received, automatically confirming...", firstResponse);
+          
+          // Automatically confirm all messages
+          const confirmResponse = await this.confirmOrder(firstResponse.id, firstResponse.messageIds);
+          return confirmResponse;
+        }
+      }
+
       return response.data;
     } catch (error) {
       Logger.error("Failed to place order:", error);
@@ -368,6 +383,37 @@ export class IBClient {
       }
       
       throw new Error("Failed to place order");
+    }
+  }
+
+  /**
+   * Confirm an order by replying to confirmation messages
+   * @param orderId The order ID from the confirmation response
+   * @param messageIds Array of message IDs to confirm
+   * @returns The confirmation response
+   */
+  async confirmOrder(orderId: string, messageIds: string[]): Promise<any> {
+    try {
+      Logger.log(`Confirming order ${orderId} with message IDs:`, messageIds);
+      
+      const response = await this.client.post("/iserver/reply", {
+        confirmed: true,
+        messageIds: messageIds
+      });
+
+      Logger.log("Order confirmation response:", response.data);
+      return response.data;
+    } catch (error) {
+      Logger.error("Failed to confirm order:", error);
+      
+      // Check if this is likely an authentication error
+      if (this.isAuthenticationError(error)) {
+        const authError = new Error("Authentication required to confirm orders. Please authenticate with Interactive Brokers first.");
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      
+      throw new Error("Failed to confirm order");
     }
   }
 
