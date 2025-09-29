@@ -303,6 +303,16 @@ export class ToolHandlers {
 
   async getPositions(input: GetPositionsInput): Promise<ToolHandlerResult> {
     try {
+      if (!input.accountId) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Account ID is required",
+            },
+          ],
+        };
+      }
       // Ensure Gateway is ready
       await this.ensureGatewayReady();
       

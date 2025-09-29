@@ -18,7 +18,7 @@ export const GetAccountInfoZodShape = {
 };
 
 export const GetPositionsZodShape = {
-  accountId: z.string().optional()
+  accountId: z.string()
 };
 
 export const GetMarketDataZodShape = {
