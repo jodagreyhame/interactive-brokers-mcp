@@ -4,7 +4,7 @@
 <img src="https://www.interactivebrokers.com/images/web/logos/ib-logo-text-black.svg" alt="Interactive Brokers" width="300">
 </div>
 
-> **⚠️ DISCLAIMER**: This is an **unofficial**, community-developed MCP server
+> **DISCLAIMER**: This is an **unofficial**, community-developed MCP server
 > and is **NOT** affiliated with or endorsed by Interactive Brokers. This
 > software is in **Alpha state** and may not work perfectly.
 
@@ -12,9 +12,9 @@ A Model Context Protocol (MCP) server that provides integration with Interactive
 Brokers' trading platform. This server allows AI assistants to interact with
 your IB account to retrieve market data, check positions, and place trades.
 
-## 🔒 Security Notice
+## Security Notice
 
-⚠️ **IMPORTANT WARNINGS:**
+**IMPORTANT WARNINGS:**
 
 - **Financial Risk**: Trading involves substantial risk of loss. Always test
   with paper trading first.
@@ -25,14 +25,11 @@ your IB account to retrieve market data, check positions, and place trades.
 - **Not Financial Advice**: This tool is for automation only, not financial
   advice.
 
+## Features
 
-## ✨ Features
-
-- **Account Management**: Get account information and balances
-- **Position Tracking**: View current positions and P&L
-- **Market Data**: Real-time market data for stocks and instruments
-- **Order Management**: Place market, limit, and stop orders
-- **Order Monitoring**: Check order status and execution details
+- **Interactive Brokers API Integration**: Full trading capabilities including account management, position tracking, real-time market data, and order management (market, limit, and stop orders)
+- **Flexible Authentication**: Choose between browser-based OAuth authentication or headless mode with credentials for automated environments
+- **Simple Setup**: Run directly with `npx` - no Docker or additional installations required. Includes pre-configured IB Gateway and Java runtime for all platforms
 
 ## Prerequisites
 
