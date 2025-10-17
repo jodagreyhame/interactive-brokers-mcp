@@ -33,6 +33,8 @@ export class IBClient {
   private isAuthenticated = false;
   private authAttempts = 0;
   private maxAuthAttempts = 3;
+  private tickleInterval?: NodeJS.Timeout;
+  private tickleIntervalMs = 30000; // 30 seconds (well within 1/sec rate limit)
 
   constructor(config: IBClientConfig) {
     this.config = config;
@@ -103,6 +105,7 @@ export class IBClient {
   updatePort(newPort: number): void {
     if (this.config.port !== newPort) {
       Logger.log(`[CLIENT] Updating port from ${this.config.port} to ${newPort}`);
+      this.stopTickle(); // Stop tickle for old session
       this.config.port = newPort;
       this.isAuthenticated = false; // Force re-authentication with new port
       this.authAttempts = 0; // Reset auth attempts
@@ -134,13 +137,77 @@ export class IBClient {
       
       if (authenticated) {
         this.authAttempts = 0; // Reset auth attempts on successful check
+        this.startTickle(); // Start session maintenance
+      } else {
+        this.stopTickle(); // Stop tickle if not authenticated
       }
       
       return authenticated;
     } catch (error) {
       this.isAuthenticated = false;
+      this.stopTickle();
       return false;
     }
+  }
+
+  /**
+   * Send a tickle request to maintain the session
+   * Rate limit: 1 request per second (we use 30 second intervals to be safe)
+   */
+  private async tickle(): Promise<void> {
+    try {
+      // Create a new axios instance without interceptors to avoid triggering authentication
+      const tickleClient = axios.create({
+        baseURL: this.baseUrl,
+        timeout: 10000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+        }),
+      });
+      
+      await tickleClient.post("/tickle");
+      Logger.log("[TICKLE] Session maintenance ping sent successfully");
+    } catch (error) {
+      Logger.warn("[TICKLE] Failed to send session maintenance ping:", error);
+      // If tickle fails, check authentication status
+      const isAuth = await this.checkAuthenticationStatus();
+      if (!isAuth) {
+        Logger.warn("[TICKLE] Session expired, stopping tickle interval");
+        this.stopTickle();
+      }
+    }
+  }
+
+  /**
+   * Start automatic session maintenance
+   */
+  private startTickle(): void {
+    if (this.tickleInterval) {
+      return; // Already running
+    }
+    
+    Logger.log(`[TICKLE] Starting automatic session maintenance (interval: ${this.tickleIntervalMs}ms)`);
+    this.tickleInterval = setInterval(() => {
+      this.tickle();
+    }, this.tickleIntervalMs);
+  }
+
+  /**
+   * Stop automatic session maintenance
+   */
+  private stopTickle(): void {
+    if (this.tickleInterval) {
+      Logger.log("[TICKLE] Stopping automatic session maintenance");
+      clearInterval(this.tickleInterval);
+      this.tickleInterval = undefined;
+    }
+  }
+
+  /**
+   * Cleanup method to stop tickle when client is destroyed
+   */
+  public destroy(): void {
+    this.stopTickle();
   }
 
   private async authenticate(): Promise<void> {
@@ -166,6 +233,7 @@ export class IBClient {
         Logger.log("[AUTH] Already authenticated");
         this.isAuthenticated = true;
         this.authAttempts = 0; // Reset on success
+        this.startTickle(); // Start session maintenance
         return;
       }
 
@@ -175,6 +243,7 @@ export class IBClient {
       Logger.log("[AUTH] Re-authentication successful");
       this.isAuthenticated = true;
       this.authAttempts = 0; // Reset on success
+      this.startTickle(); // Start session maintenance
     } catch (error) {
       Logger.error(`[AUTH] Authentication failed (attempt ${this.authAttempts}/${this.maxAuthAttempts}):`, isError(error) && error.message, isError(error) && error.stack);
       if (this.authAttempts >= this.maxAuthAttempts) {
