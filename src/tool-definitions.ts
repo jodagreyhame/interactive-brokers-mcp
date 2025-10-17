@@ -2,10 +2,10 @@
 import { z } from "zod";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
-// Helper for tolerant integer (allows "1" as string or actual number)
+// Helper for tolerant number (allows "1", "1.5", or actual number for fractional shares)
 const IntegerOrStringIntegerZod = z.union([
-  z.number().int().positive(),
-  z.string().regex(/^[0-9]+$/).transform(val => parseInt(val, 10))
+  z.number().positive(),
+  z.string().regex(/^[0-9]+(\.[0-9]+)?$/).transform(val => parseFloat(val))
 ]);
 
 // Zod Raw Shapes (for server.tool() method)
