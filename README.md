@@ -144,6 +144,7 @@ management systems.
 | `get_market_data`  | Real-time market data for symbols         |
 | `place_order`      | Place market, limit, or stop orders       |
 | `get_order_status` | Check order execution status              |
+| `get_live_orders`  | Get all live/open orders for monitoring   |
 
 ## Troubleshooting
 
