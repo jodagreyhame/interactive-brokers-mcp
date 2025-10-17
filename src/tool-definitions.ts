@@ -41,6 +41,10 @@ export const GetOrderStatusZodShape = {
   orderId: z.string()
 };
 
+export const GetLiveOrdersZodShape = {
+  accountId: z.string().optional()
+};
+
 export const ConfirmOrderZodShape = {
   replyId: z.string(),
   messageIds: z.array(z.string())
@@ -73,6 +77,8 @@ export const PlaceOrderZodSchema = z.object(PlaceOrderZodShape).refine(
 
 export const GetOrderStatusZodSchema = z.object(GetOrderStatusZodShape);
 
+export const GetLiveOrdersZodSchema = z.object(GetLiveOrdersZodShape);
+
 export const ConfirmOrderZodSchema = z.object(ConfirmOrderZodShape);
 
 // ── TypeScript types (inferred from Zod schemas) ────────────────────────────
@@ -82,4 +88,5 @@ export type GetPositionsInput = z.infer<typeof GetPositionsZodSchema>;
 export type GetMarketDataInput = z.infer<typeof GetMarketDataZodSchema>;
 export type PlaceOrderInput = z.infer<typeof PlaceOrderZodSchema>;
 export type GetOrderStatusInput = z.infer<typeof GetOrderStatusZodSchema>;
+export type GetLiveOrdersInput = z.infer<typeof GetLiveOrdersZodSchema>;
 export type ConfirmOrderInput = z.infer<typeof ConfirmOrderZodSchema>;

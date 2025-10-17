@@ -9,6 +9,7 @@ import {
   GetMarketDataZodShape,
   PlaceOrderZodShape,
   GetOrderStatusZodShape,
+  GetLiveOrdersZodShape,
   ConfirmOrderZodShape
 } from "./tool-definitions.js";
 
@@ -80,6 +81,15 @@ export function registerTools(
     "Get the status of a specific order. Usage: `{ \"orderId\": \"12345\" }`.",
     GetOrderStatusZodShape,
     async (args) => await handlers.getOrderStatus(args)
+  );
+
+  // Register get_live_orders tool
+  server.tool(
+    "get_live_orders",
+    "Get all live/open orders for monitoring and validation. Usage: `{}` to get all orders or `{ \"accountId\": \"<id>\" }` for a specific account. " +
+    "This is the recommended way to validate that market orders were executed successfully after placing them.",
+    GetLiveOrdersZodShape,
+    async (args) => await handlers.getLiveOrders(args)
   );
 
   // Register confirm_order tool

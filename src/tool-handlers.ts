@@ -10,6 +10,7 @@ import {
   GetMarketDataInput,
   PlaceOrderInput,
   GetOrderStatusInput,
+  GetLiveOrdersInput,
   ConfirmOrderInput,
 } from "./tool-definitions.js";
 
@@ -424,6 +425,37 @@ export class ToolHandlers {
       }
       
       const result = await this.context.ibClient.getOrderStatus(input.orderId);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: this.formatError(error),
+          },
+        ],
+      };
+    }
+  }
+
+  async getLiveOrders(input: GetLiveOrdersInput): Promise<ToolHandlerResult> {
+    try {
+      // Ensure Gateway is ready
+      await this.ensureGatewayReady();
+      
+      // Ensure authentication in headless mode
+      if (this.context.config.IB_HEADLESS_MODE) {
+        await this.ensureAuth();
+      }
+      
+      const result = await this.context.ibClient.getOrders(input.accountId);
       return {
         content: [
           {
