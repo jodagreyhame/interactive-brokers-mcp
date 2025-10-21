@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server that provides integration with Interactive
 Brokers' trading platform. This server allows AI assistants to interact with
 your IB account to retrieve market data, check positions, and place trades.
 
-![Showcase of Interactive Brokers MCP](./IB-MCP.mp4)
+![Showcase of Interactive Brokers MCP](./IB-MCP.gif)
 
 
 ## Features
