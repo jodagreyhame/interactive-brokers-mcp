@@ -455,7 +455,8 @@ export class ToolHandlers {
         await this.ensureAuth();
       }
       
-      const result = await this.context.ibClient.getOrders(input.accountId);
+      // Always fetch all orders (don't pass accountId as it causes API errors)
+      const result = await this.context.ibClient.getOrders();
       return {
         content: [
           {

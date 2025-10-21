@@ -86,7 +86,7 @@ export function registerTools(
   // Register get_live_orders tool
   server.tool(
     "get_live_orders",
-    "Get all live/open orders for monitoring and validation. Usage: `{}` to get all orders or `{ \"accountId\": \"<id>\" }` for a specific account. " +
+    "Get all live/open orders for monitoring and validation. Usage: `{}`. " +
     "This is the recommended way to validate that market orders were executed successfully after placing them.",
     GetLiveOrdersZodShape,
     async (args) => await handlers.getLiveOrders(args)
