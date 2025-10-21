@@ -192,16 +192,17 @@ describe('ToolHandlers', () => {
       const result = await handlers.getLiveOrders({});
 
       expect(result.content).toBeDefined();
-      expect(mockIBClient.getOrders).toHaveBeenCalledWith(undefined);
+      expect(mockIBClient.getOrders).toHaveBeenCalledWith();
     });
 
-    it('should return orders for specific account', async () => {
+    it('should always fetch all orders without account parameter', async () => {
       const mockOrders = [{ orderId: '123', status: 'Working' }];
       mockIBClient.getOrders = vi.fn().mockResolvedValue(mockOrders);
 
-      const result = await handlers.getLiveOrders({ accountId: 'U12345' });
+      const result = await handlers.getLiveOrders({});
 
-      expect(mockIBClient.getOrders).toHaveBeenCalledWith('U12345');
+      expect(mockIBClient.getOrders).toHaveBeenCalledWith();
+      expect(result.content).toBeDefined();
     });
   });
 
