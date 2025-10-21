@@ -41,9 +41,7 @@ export const GetOrderStatusZodShape = {
   orderId: z.string()
 };
 
-export const GetLiveOrdersZodShape = {
-  accountId: z.string().optional()
-};
+export const GetLiveOrdersZodShape = {};
 
 export const ConfirmOrderZodShape = {
   replyId: z.string(),
